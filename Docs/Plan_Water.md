@@ -1,7 +1,8 @@
+# Plan — Watershed : système d'eau par bassins (plugin générique)
 
-| Taille de cellule | 2 m par défaut et minimum. Les courbes volume/niveau peuvent être calculées depuis le terrain à une résolution plus fine : la grille ne limite pas la précision des niveaux |# Plan — Watershed : système d'eau par bassins (plugin générique)
+> Accueil : [[00 - Accueil]] · Lié à : [[Plan_PatchTerrain]]
 
-> Statut : **conception**, en attente de validation. Rien n'est codé.
+> Statut : **conçu**, décisions principales prises (voir « Décisions »). Rien n'est codé.
 
 ## Le problème de départ
 
@@ -46,6 +47,7 @@ Les opérations :
 | Donnée | Forme |
 |---|---|
 | Hauteur du sol (2,5D) | Grille dense (texture), fournie exactement par le terrain : aucune trace |
+| Taille de cellule | 2 m par défaut et minimum. Les courbes volume/niveau peuvent être calculées depuis le terrain à une résolution plus fine : la grille ne limite pas la précision des niveaux |
 | Occupation 3D (cavernes, bâtiments, objets) | Seulement dans des **volumes délimités** ; grille de voxels remplie sur GPU (Global Distance Field), relue en asynchrone |
 | Étiquettes | Grille dense cellule → bassin (accès direct) |
 | Bassins | Nœuds : courbe volume/niveau (tableau trié), col, parent, enfants, volume d'eau |

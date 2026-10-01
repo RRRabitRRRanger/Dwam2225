@@ -1,5 +1,7 @@
 # Plan — Plugin `KlattVoice` : synthèse vocale Klatt complète, en C++ + MetaSound
 
+> Accueil : [[00 - Accueil]]
+
 > Statut : **validé** (2026-10-01). Langue de départ : **anglais** (2026-10-02).
 
 ## Objectif

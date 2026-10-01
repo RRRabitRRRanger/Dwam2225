@@ -1,5 +1,7 @@
 # Plan — Plugin `PatchTerrain` : terrain en surfaces paramétriques, par chunks
 
+> Accueil : [[00 - Accueil]] · Lié à : [[Plan_Water]]
+
 > Statut : **validé, étape 1 en cours** (2026-10-01).
 
 ## Objectif

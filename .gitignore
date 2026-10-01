@@ -13,3 +13,6 @@ Saved
 *.suo
 *.xcodeproj
 *.xcworkspace
+# Coffre Obsidian de Claude (Docs/) : réglages partagés versionnés, état de l'interface ignoré
+Docs/.obsidian/workspace*.json
+Docs/.obsidian/cache
