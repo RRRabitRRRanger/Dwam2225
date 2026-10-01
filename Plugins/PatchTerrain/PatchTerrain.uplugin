@@ -1,0 +1,25 @@
+{
+	"FileVersion": 3,
+	"Version": 1,
+	"VersionName": "0.1",
+	"FriendlyName": "Patch Terrain",
+	"Description": "Terrain en surfaces paramétriques (canevas de points de contrôle), découpé en chunks, générable en éditeur et au runtime.",
+	"Category": "Terrain",
+	"CreatedBy": "Alexandre VonDerRopp",
+	"CreatedByURL": "",
+	"DocsURL": "",
+	"MarketplaceURL": "",
+	"SupportURL": "",
+	"CanContainContent": true,
+	"IsBetaVersion": true,
+	"IsExperimentalVersion": false,
+	"Installed": false,
+	"EnabledByDefault": true,
+	"Modules": [
+		{
+			"Name": "PatchTerrain",
+			"Type": "Runtime",
+			"LoadingPhase": "Default"
+		}
+	]
+}
