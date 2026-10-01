@@ -1,0 +1,17 @@
+{
+	"FileVersion": 3,
+	"Version": 1,
+	"VersionName": "1.0",
+	"FriendlyName": "LOA",
+	"Description": "Level of Abstraction,. Topology Expander pour faire des objet\"abstrait\", comme passer d'une map de JRP a un niveau, jusqua quelque chose d'hyper Realiste",
+	"Category": "Other",
+	"CreatedBy": "Alexandre",
+	"CreatedByURL": "",
+	"DocsURL": "",
+	"MarketplaceURL": "",
+	"SupportURL": "",
+	"CanContainContent": true,
+	"IsBetaVersion": false,
+	"IsExperimentalVersion": false,
+	"Installed": false
+}

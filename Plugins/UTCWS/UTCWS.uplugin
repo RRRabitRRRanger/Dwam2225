@@ -1,0 +1,17 @@
+{
+	"FileVersion": 3,
+	"Version": 1,
+	"VersionName": "1.0",
+	"FriendlyName": "UTCWS",
+	"Description": "Universal Throwable & Composite Weapon System (UTCWS) : armes modulaires + objets tous jetables + noms de marques et periodes",
+	"Category": "Other",
+	"CreatedBy": "Aleaxandre VonDerRopp",
+	"CreatedByURL": "",
+	"DocsURL": "",
+	"MarketplaceURL": "",
+	"SupportURL": "",
+	"CanContainContent": true,
+	"IsBetaVersion": true,
+	"IsExperimentalVersion": false,
+	"Installed": false
+}

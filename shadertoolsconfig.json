@@ -1,0 +1,10 @@
+{
+    "hlsl.preprocessorDefinitions": {
+    },
+    "hlsl.additionalIncludeDirectories": [
+        "C:/Program Files/Epic Games/UE_5.8/Engine/Shaders"
+    ],
+    "hlsl.virtualDirectoryMappings": {
+        "/Engine": "C:/Program Files/Epic Games/UE_5.8/Engine/Shaders"
+    }
+}
