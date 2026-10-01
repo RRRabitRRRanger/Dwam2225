@@ -2,6 +2,8 @@
 
 Projet perso Unreal Engine. Réponds et commente en français.
 
+> **Avant tout travail : lire `Docs/00 - Accueil.md`.** `Docs/` est le coffre Obsidian confié aux sessions Claude : plans par système, état d'avancement, décisions et journal. À tenir à jour en fin de session (règles dans l'accueil).
+
 ## Environnement
 
 - **Moteur** : Unreal Engine **5.8.3** (build Launcher, non modifiable), installé dans `C:\Program Files\Epic Games\UE_5.8`
