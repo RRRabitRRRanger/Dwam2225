@@ -1,0 +1,323 @@
+// =====================================================================================
+// OKLab.ush — couleur perceptuelle OKLab / OKLCH (DWAM)
+//
+// Chemin virtuel : /Plugin/DwamLighting/OKLab.ush
+// Bibliothèque PURE MATHS (aucune fonction du moteur).
+//
+// Règle d'usage :
+//  - Calculer en OKLab (cartésien) : éclaircir, saturer, tourner la teinte, mélanger.
+//  - N'utiliser OKLCH (polaire) que pour l'interface (teinte en degrés) ou pour une interpolation
+//    qui doit garder la saturation (chemin court sur la roue des teintes).
+//
+// Référence : Björn Ottosson, « A perceptual color space for image processing » (2020)
+// et « sRGB gamut clipping » (2021). Matrices et coefficients de ces publications.
+// =====================================================================================
+
+#pragma once
+
+// -------------------------------------------------------------------------------------
+// Conversions
+// -------------------------------------------------------------------------------------
+
+/** Racine cubique signée (valeurs négatives possibles hors gamut), sans NaN. */
+float DwamCbrt(float X)
+{
+	return sign(X) * pow(abs(X), 1.0 / 3.0);
+}
+
+/** sRGB linéaire -> OKLab (L ~ 0..1, a et b ~ -0.4..0.4). */
+float3 DwamLinearSRGBToOKLab(float3 C)
+{
+	const float L = 0.4122214708 * C.r + 0.5363325363 * C.g + 0.0514459929 * C.b;
+	const float M = 0.2119034982 * C.r + 0.6806995451 * C.g + 0.1073969566 * C.b;
+	const float S = 0.0883024619 * C.r + 0.2817188376 * C.g + 0.6299787005 * C.b;
+
+	const float L_ = DwamCbrt(L);
+	const float M_ = DwamCbrt(M);
+	const float S_ = DwamCbrt(S);
+
+	return float3(
+		0.2104542553 * L_ + 0.7936177850 * M_ - 0.0040720468 * S_,
+		1.9779984951 * L_ - 2.4285922050 * M_ + 0.4505937099 * S_,
+		0.0259040371 * L_ + 0.7827717662 * M_ - 0.8086757660 * S_);
+}
+
+/** OKLab -> sRGB linéaire, SANS gamut mapping (peut sortir de [0, 1]). */
+float3 DwamOKLabToLinearSRGBUnclamped(float3 Lab)
+{
+	const float L_ = Lab.x + 0.3963377774 * Lab.y + 0.2158037573 * Lab.z;
+	const float M_ = Lab.x - 0.1055613458 * Lab.y - 0.0638541728 * Lab.z;
+	const float S_ = Lab.x - 0.0894841775 * Lab.y - 1.2914855480 * Lab.z;
+
+	const float L = L_ * L_ * L_;
+	const float M = M_ * M_ * M_;
+	const float S = S_ * S_ * S_;
+
+	return float3(
+		 4.0767416621 * L - 3.3077115913 * M + 0.2309699292 * S,
+		-1.2684380046 * L + 2.6097574011 * M - 0.3413193965 * S,
+		-0.0041960863 * L - 0.7034186147 * M + 1.7076147010 * S);
+}
+
+/** OKLab -> OKLCH (L, C, H en DEGRÉS 0..360). À réserver à l'interface et aux interpolations. */
+float3 DwamOKLabToOKLCH(float3 Lab)
+{
+	const float C = length(Lab.yz);
+	float H = degrees(atan2(Lab.z, Lab.y));
+	H = H < 0.0 ? H + 360.0 : H;
+	return float3(Lab.x, C, H);
+}
+
+/** OKLCH (H en degrés) -> OKLab. */
+float3 DwamOKLCHToOKLab(float3 LCH)
+{
+	float S, C;
+	sincos(radians(LCH.z), S, C);
+	return float3(LCH.x, LCH.y * C, LCH.y * S);
+}
+
+// -------------------------------------------------------------------------------------
+// Opérations directement en OKLab (pas de trigonométrie inverse, pas de fmod)
+// -------------------------------------------------------------------------------------
+
+/** Chroma (saturation perceptuelle). */
+float DwamOKLabChroma(float3 Lab)
+{
+	return length(Lab.yz);
+}
+
+/** Multiplie la chroma par Factor (équivaut à C *= Factor en OKLCH). */
+float3 DwamOKLabScaleChroma(float3 Lab, float Factor)
+{
+	return float3(Lab.x, Lab.yz * Factor);
+}
+
+/** Tourne la teinte de Degrees (équivaut à H += Degrees en OKLCH, sans fmod ni wrap). */
+float3 DwamOKLabRotateHue(float3 Lab, float Degrees)
+{
+	float S, C;
+	sincos(radians(Degrees), S, C);
+	return float3(Lab.x, Lab.y * C - Lab.z * S, Lab.y * S + Lab.z * C);
+}
+
+/**
+ * Mélange de deux couleurs.
+ *  - Mode Lab (bHuePath = false) : ligne droite ; deux teintes opposées passent par le gris.
+ *  - Mode teinte (bHuePath = true) : chroma et teinte interpolées par le chemin le plus court
+ *    sur la roue (garde la saturation). Équivaut au bloc « chemin le plus court » d'EyeLids.
+ */
+float3 DwamOKLabLerp(float3 LabA, float3 LabB, float Alpha, bool bHuePath)
+{
+	if (!bHuePath)
+	{
+		return lerp(LabA, LabB, Alpha);
+	}
+	const float CA = length(LabA.yz);
+	const float CB = length(LabB.yz);
+	const float HA = atan2(LabA.z, LabA.y);
+	const float HB = atan2(LabB.z, LabB.y);
+	float DH = HB - HA;
+	DH -= 6.28318530718 * round(DH / 6.28318530718);    // chemin le plus court, dans [-pi, pi]
+	const float H = HA + DH * Alpha;
+	const float C = lerp(CA, CB, Alpha);
+	float S, CosH;
+	sincos(H, S, CosH);
+	return float3(lerp(LabA.x, LabB.x, Alpha), C * CosH, C * S);
+}
+
+// -------------------------------------------------------------------------------------
+// Gamut mapping (rentrer dans sRGB en gardant L et la teinte, en réduisant la chroma)
+// -------------------------------------------------------------------------------------
+
+/**
+ * Saturation maximale atteignable dans sRGB pour la direction de teinte (a, b) normalisée.
+ * Polynôme d'approximation + un pas de Halley (Ottosson 2021).
+ */
+float DwamOKLabMaxSaturation(float A, float B)
+{
+	float K0, K1, K2, K3, K4, WL, WM, WS;
+	if (-1.88170328 * A - 0.80936493 * B > 1.0)
+	{
+		// Le rouge sature en premier
+		K0 = 1.19086277; K1 = 1.76576728; K2 = 0.59662641; K3 = 0.75515197; K4 = 0.56771245;
+		WL = 4.0767416621; WM = -3.3077115913; WS = 0.2309699292;
+	}
+	else if (1.81444104 * A - 1.19445276 * B > 1.0)
+	{
+		// Le vert sature en premier
+		K0 = 0.73956515; K1 = -0.45954404; K2 = 0.08285427; K3 = 0.12541070; K4 = 0.14503204;
+		WL = -1.2684380046; WM = 2.6097574011; WS = -0.3413193965;
+	}
+	else
+	{
+		// Le bleu sature en premier
+		K0 = 1.35733652; K1 = -0.00915799; K2 = -1.15130210; K3 = -0.50559606; K4 = 0.00692167;
+		WL = -0.0041960863; WM = -0.7034186147; WS = 1.7076147010;
+	}
+
+	float Sat = K0 + K1 * A + K2 * B + K3 * A * A + K4 * A * B;
+
+	const float KL =  0.3963377774 * A + 0.2158037573 * B;
+	const float KM = -0.1055613458 * A - 0.0638541728 * B;
+	const float KS = -0.0894841775 * A - 1.2914855480 * B;
+
+	const float L_ = 1.0 + Sat * KL;
+	const float M_ = 1.0 + Sat * KM;
+	const float S_ = 1.0 + Sat * KS;
+
+	const float L = L_ * L_ * L_;
+	const float M = M_ * M_ * M_;
+	const float S = S_ * S_ * S_;
+
+	const float LdS = 3.0 * KL * L_ * L_;
+	const float MdS = 3.0 * KM * M_ * M_;
+	const float SdS = 3.0 * KS * S_ * S_;
+
+	const float LdS2 = 6.0 * KL * KL * L_;
+	const float MdS2 = 6.0 * KM * KM * M_;
+	const float SdS2 = 6.0 * KS * KS * S_;
+
+	const float F  = WL * L + WM * M + WS * S;
+	const float F1 = WL * LdS + WM * MdS + WS * SdS;
+	const float F2 = WL * LdS2 + WM * MdS2 + WS * SdS2;
+
+	Sat = Sat - F * F1 / (F1 * F1 - 0.5 * F * F2);
+	return Sat;
+}
+
+/** Sommet (« cusp ») du gamut sRGB pour la teinte (a, b) normalisée : x = L, y = C. */
+float2 DwamOKLabFindCusp(float A, float B)
+{
+	const float SCusp = DwamOKLabMaxSaturation(A, B);
+	const float3 RGBAtMax = DwamOKLabToLinearSRGBUnclamped(float3(1.0, SCusp * A, SCusp * B));
+	const float LCusp = DwamCbrt(1.0 / max(max(RGBAtMax.r, RGBAtMax.g), max(RGBAtMax.b, 1e-6)));
+	return float2(LCusp, LCusp * SCusp);
+}
+
+/**
+ * Intersection du segment (L0, 0) -> (L1, C1) avec le bord du gamut, pour la teinte (a, b) normalisée.
+ * Renvoie t dans [0, 1] : la fraction du segment qui reste dans le gamut.
+ */
+float DwamOKLabGamutIntersection(float A, float B, float L1, float C1, float L0)
+{
+	const float2 Cusp = DwamOKLabFindCusp(A, B);
+	float T;
+
+	if ((L1 - L0) * Cusp.y - (Cusp.x - L0) * C1 <= 0.0)
+	{
+		// Moitié basse : le bord est une droite, intersection exacte
+		T = Cusp.y * L0 / (C1 * Cusp.x + Cusp.y * (L0 - L1));
+	}
+	else
+	{
+		// Moitié haute : approximation par une droite, puis un pas de Halley
+		T = Cusp.y * (L0 - 1.0) / (C1 * (Cusp.x - 1.0) + Cusp.y * (L0 - L1));
+
+		const float DL = L1 - L0;
+		const float DC = C1;
+
+		const float KL =  0.3963377774 * A + 0.2158037573 * B;
+		const float KM = -0.1055613458 * A - 0.0638541728 * B;
+		const float KS = -0.0894841775 * A - 1.2914855480 * B;
+
+		const float LDt = DL + DC * KL;
+		const float MDt = DL + DC * KM;
+		const float SDt = DL + DC * KS;
+
+		const float L = L0 * (1.0 - T) + T * L1;
+		const float C = T * C1;
+
+		const float L_ = L + C * KL;
+		const float M_ = L + C * KM;
+		const float S_ = L + C * KS;
+
+		const float LL = L_ * L_ * L_;
+		const float MM = M_ * M_ * M_;
+		const float SS = S_ * S_ * S_;
+
+		const float Ldt = 3.0 * LDt * L_ * L_;
+		const float Mdt = 3.0 * MDt * M_ * M_;
+		const float Sdt = 3.0 * SDt * S_ * S_;
+
+		const float Ldt2 = 6.0 * LDt * LDt * L_;
+		const float Mdt2 = 6.0 * MDt * MDt * M_;
+		const float Sdt2 = 6.0 * SDt * SDt * S_;
+
+		const float R  = 4.0767416621 * LL - 3.3077115913 * MM + 0.2309699292 * SS - 1.0;
+		const float R1 = 4.0767416621 * Ldt - 3.3077115913 * Mdt + 0.2309699292 * Sdt;
+		const float R2 = 4.0767416621 * Ldt2 - 3.3077115913 * Mdt2 + 0.2309699292 * Sdt2;
+		const float UR = R1 / (R1 * R1 - 0.5 * R * R2);
+		const float TR = UR >= 0.0 ? -R * UR : 1e9;
+
+		const float G  = -1.2684380046 * LL + 2.6097574011 * MM - 0.3413193965 * SS - 1.0;
+		const float G1 = -1.2684380046 * Ldt + 2.6097574011 * Mdt - 0.3413193965 * Sdt;
+		const float G2 = -1.2684380046 * Ldt2 + 2.6097574011 * Mdt2 - 0.3413193965 * Sdt2;
+		const float UG = G1 / (G1 * G1 - 0.5 * G * G2);
+		const float TG = UG >= 0.0 ? -G * UG : 1e9;
+
+		const float Bl  = -0.0041960863 * LL - 0.7034186147 * MM + 1.7076147010 * SS - 1.0;
+		const float Bl1 = -0.0041960863 * Ldt - 0.7034186147 * Mdt + 1.7076147010 * Sdt;
+		const float Bl2 = -0.0041960863 * Ldt2 - 0.7034186147 * Mdt2 + 1.7076147010 * Sdt2;
+		const float UB = Bl1 / (Bl1 * Bl1 - 0.5 * Bl * Bl2);
+		const float TB = UB >= 0.0 ? -Bl * UB : 1e9;
+
+		T += min(TR, min(TG, TB));
+	}
+	return T;
+}
+
+/**
+ * OKLab -> sRGB linéaire, AVEC gamut mapping analytique : si la couleur sort de sRGB, on réduit
+ * la chroma à L et teinte constants jusqu'au bord du gamut (même intention que la dichotomie
+ * de Shader_OKLCH, sans boucle). L hors [0, 1] est ramené dans [0, 1].
+ */
+float3 DwamOKLabToLinearSRGB(float3 Lab)
+{
+	const float3 RGB = DwamOKLabToLinearSRGBUnclamped(Lab);
+	if (all(RGB >= 0.0) && all(RGB <= 1.0))
+	{
+		return RGB;
+	}
+
+	const float L = Lab.x;
+	const float C = max(1e-5, length(Lab.yz));
+	const float A = Lab.y / C;
+	const float B = Lab.z / C;
+
+	const float L0 = saturate(L);
+	const float T = saturate(DwamOKLabGamutIntersection(A, B, L, C, L0));
+	const float LClipped = L0 * (1.0 - T) + T * L;
+	const float CClipped = T * C;
+
+	return saturate(DwamOKLabToLinearSRGBUnclamped(float3(LClipped, CClipped * A, CClipped * B)));
+}
+
+/**
+ * Ancienne méthode (dichotomie à L constant, 8 itérations), gardée pour comparaison.
+ * Équivalente au bloc « gamut mapping par réduction de chroma » de Shader_OKLCH.
+ */
+float3 DwamOKLabToLinearSRGBBisect(float3 Lab)
+{
+	float3 RGB = DwamOKLabToLinearSRGBUnclamped(Lab);
+	if (min(RGB.r, min(RGB.g, RGB.b)) >= 0.0)
+	{
+		return max(RGB, 0.0);
+	}
+	float Lo = 0.0;
+	float Hi = 1.0;
+	[unroll]
+	for (int I = 0; I < 8; ++I)
+	{
+		const float Mid = 0.5 * (Lo + Hi);
+		const float3 Test = DwamOKLabToLinearSRGBUnclamped(float3(Lab.x, Lab.yz * Mid));
+		if (min(Test.r, min(Test.g, Test.b)) < -1e-5)
+		{
+			Hi = Mid;
+		}
+		else
+		{
+			Lo = Mid;
+		}
+	}
+	return max(DwamOKLabToLinearSRGBUnclamped(float3(Lab.x, Lab.yz * Lo)), 0.0);
+}

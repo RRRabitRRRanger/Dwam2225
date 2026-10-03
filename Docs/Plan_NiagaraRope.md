@@ -2,7 +2,7 @@
 
 > Accueil : [[00 - Accueil]] · Lié à : [[Plan_GpuTraces]], [[Plan_PatchTerrain]]
 
-> Statut : **proposition**, en attente de validation. Rien n'est codé. Vérifié dans le source et le contenu du moteur 5.8 (2026-10-02).
+> Statut : **validé** (2026-10-03). ~~GPU dans Niagara d'abord~~ → **variante CPU codée d'abord** (étape 5 du plan, même algorithme), voir « Décision 2026-10-03 » en bas. Plugin `Rope`, guide [[Guide_Rope]]. Solveur testé (tests automatiques), pas encore vu dans l'éditeur. Vérifié dans le source et le contenu du moteur 5.8 (2026-10-02).
 
 ## Objectif
 
@@ -74,3 +74,11 @@ L'auteur cite une technique de Naughty Dog comme inspiration et la jugeait peu a
 - Premier cas d'usage : liane du décor, ou bandoulière du personnage ?
 - Nombre de cordes simultanées visées.
 - La technique de Naughty Dog : `À CONFIRMER`.
+
+## Décision 2026-10-03 : CPU d'abord
+
+- **Contrainte trouvée dans le moteur** : le *Particle Attribute Reader* d'un émetteur sur lui-même renvoie les données **de la frame précédente** (`NiagaraDataInterfaceParticleRead.cpp`, description de `Get Position By Index`). Les itérations de contraintes d'une frame ne voient donc pas les corrections des voisins. Un solveur GPU devra passer par une grille (*Grid 2D Collection*, lue et écrite à chaque *simulation stage*).
+- **Décision** : la variante CPU de l'étape 5 est faite d'abord (plugin `Rope`, composant `URopeComponent`). Elle couvre l'objectif « faire le tour d'un objet », se teste hors du jeu et ne demande aucun montage Niagara. Le rendu Niagara (ruban) reste possible via `Get Node Positions`.
+- **Ajouts** par rapport au plan : auto-collision (sinon les tours d'un enroulement se tassent les uns dans les autres), frottement de position, bouts attachés à l'obstacle lors d'un enroulement. Les tests ont montré qu'une corde serrée à bouts libres se déroule et qu'une corde lâche glisse le long d'un poteau vertical (comportement physique).
+- **Reste à faire** : version GPU (Grid2D) si des dizaines de cordes décoratives sont nécessaires ; collisions avec le terrain par sa texture de hauteur (le balayage du décor voit déjà sa collision).
+- La technique de Naughty Dog : toujours `À CONFIRMER`.

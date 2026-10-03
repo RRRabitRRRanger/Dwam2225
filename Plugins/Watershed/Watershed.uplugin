@@ -1,0 +1,25 @@
+{
+	"FileVersion": 3,
+	"Version": 1,
+	"VersionName": "0.1",
+	"FriendlyName": "Watershed",
+	"Description": "Eau par bassins : hiérarchie de dépressions (Fill-Spill-Merge, Barnes 2021), niveaux par bassin, lacs rendus en tuiles.",
+	"Category": "Gameplay",
+	"CreatedBy": "Alexandre VonDerRopp",
+	"CreatedByURL": "",
+	"DocsURL": "",
+	"MarketplaceURL": "",
+	"SupportURL": "",
+	"CanContainContent": true,
+	"IsBetaVersion": true,
+	"IsExperimentalVersion": false,
+	"Installed": false,
+	"EnabledByDefault": true,
+	"Modules": [
+		{
+			"Name": "Watershed",
+			"Type": "Runtime",
+			"LoadingPhase": "Default"
+		}
+	]
+}

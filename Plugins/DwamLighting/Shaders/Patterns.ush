@@ -1,0 +1,77 @@
+// =====================================================================================
+// Patterns.ush — motifs procéduraux anti-aliasés analytiquement (DWAM)
+//
+// Chemin virtuel : /Plugin/DwamLighting/Patterns.ush
+//
+// Principe (« box filtering ») : au lieu d'échantillonner le motif au centre du pixel (ce qui
+// scintille au loin), on calcule sa MOYENNE exacte sur l'empreinte du pixel, donnée par les
+// dérivées écran (ddx / ddy) des coordonnées. Pas de mipmap, pas de TAA : le motif se fond en gris
+// moyen au loin au lieu de fourmiller.
+//
+// Origine : Inigo Quilez — « Box filtered XOR pattern » (https://www.shadertoy.com/view/tdBXRW)
+// et « filterable procedurals » (iquilezles.org). Portage GLSL -> HLSL.
+// Licence du code d'origine : à vérifier sur la page Shadertoy (souvent MIT chez l'auteur).
+// =====================================================================================
+
+#pragma once
+
+/** Partie fractionnaire, comme fract() en GLSL (identique à frac en HLSL). */
+float2 DwamFract2(float2 X)
+{
+	return X - floor(X);
+}
+
+/**
+ * Motif XOR filtré (8 octaves) : moyenne exacte du motif sur l'empreinte du pixel.
+ * @param P     coordonnées du motif (ex. UV × échelle, ou position monde / taille de case)
+ * @param DPdx  dérivée écran de P en X (ddx(P))
+ * @param DPdy  dérivée écran de P en Y (ddy(P))
+ * @return      valeur 0..1
+ */
+float DwamFilteredXor(float2 P, float2 DPdx, float2 DPdy)
+{
+	float Xor = 0.0;
+	[unroll]
+	for (int I = 0; I < 8; ++I)
+	{
+		const float2 W = max(abs(DPdx), abs(DPdy)) + 0.01;
+		const float2 F = 2.0 * (abs(DwamFract2((P - 0.5 * W) / 2.0) - 0.5) -
+		                        abs(DwamFract2((P + 0.5 * W) / 2.0) - 0.5)) / W;
+		Xor += 0.5 - 0.5 * F.x * F.y;
+
+		DPdx *= 0.5;
+		DPdy *= 0.5;
+		P    *= 0.5;
+		Xor  *= 0.5;
+	}
+	return Xor;
+}
+
+/**
+ * Damier filtré : même principe, une seule octave. 0 ou 1 de près, 0.5 au loin.
+ * @param P, DPdx, DPdy  comme ci-dessus
+ */
+float DwamFilteredChecker(float2 P, float2 DPdx, float2 DPdy)
+{
+	const float2 W = abs(DPdx) + abs(DPdy) + 0.001;   // empreinte du pixel (somme des dérivées, comme chez Quilez)
+	// Intégrale analytique d'une onde carrée sur [P - W/2, P + W/2]
+	const float2 I = 2.0 * (abs(DwamFract2((P - 0.5 * W) * 0.5) - 0.5) -
+	                        abs(DwamFract2((P + 0.5 * W) * 0.5) - 0.5)) / W;
+	return 0.5 - 0.5 * I.x * I.y;
+}
+
+// -------------------------------------------------------------------------------------
+// Versions « automatiques » : dérivées calculées ici (PIXEL SHADER uniquement).
+// À appeler depuis un nœud Custom branché sur une sortie de pixel (Base Color, Emissive…),
+// pas sur World Position Offset (vertex shader, où ddx/ddy n'existent pas).
+// -------------------------------------------------------------------------------------
+
+float DwamFilteredXorAuto(float2 P)
+{
+	return DwamFilteredXor(P, ddx(P), ddy(P));
+}
+
+float DwamFilteredCheckerAuto(float2 P)
+{
+	return DwamFilteredChecker(P, ddx(P), ddy(P));
+}

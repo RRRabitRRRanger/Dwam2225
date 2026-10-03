@@ -1,0 +1,25 @@
+{
+	"FileVersion": 3,
+	"Version": 1,
+	"VersionName": "0.1",
+	"FriendlyName": "Rope",
+	"Description": "Corde simulée (Verlet + contraintes PBD) : épingles, collisions analytiques et décor, enroulement autour d'un objet, rendu en tube.",
+	"Category": "Gameplay",
+	"CreatedBy": "Alexandre VonDerRopp",
+	"CreatedByURL": "",
+	"DocsURL": "",
+	"MarketplaceURL": "",
+	"SupportURL": "",
+	"CanContainContent": true,
+	"IsBetaVersion": true,
+	"IsExperimentalVersion": false,
+	"Installed": false,
+	"EnabledByDefault": true,
+	"Modules": [
+		{
+			"Name": "Rope",
+			"Type": "Runtime",
+			"LoadingPhase": "Default"
+		}
+	]
+}

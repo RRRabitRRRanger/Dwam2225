@@ -1,0 +1,219 @@
+// =====================================================================================
+// Lighting.ush — briques d'éclairage maison (DWAM)
+//
+// Chemin virtuel : /Plugin/DwamLighting/Lighting.ush
+// Bibliothèque PURE MATHS, autonome (n'a pas besoin d'OKLab.ush).
+// Les couleurs « Lab » sont en OKLab (voir OKLab.ush pour les conversions).
+//
+// Contenu :
+//   1. Garde-fou de normal map (deux normales : géométrique + normal map)
+//   2. Origine des rayons d'ombre
+//   3. Diffus en OKLab (énergie, chroma 3 zones, scotopique, teinte)
+//   4. Spéculaires : toutes les variantes, en stock
+// =====================================================================================
+
+#pragma once
+
+#define DWAM_PI 3.14159265359
+
+// -------------------------------------------------------------------------------------
+// 1. Garde-fou de normal map
+// -------------------------------------------------------------------------------------
+//
+// Problème : la normal map penche la normale pixel par pixel. Juste derrière le terminateur,
+// la vraie surface (géométrique) tourne déjà le dos à la lumière, mais la normale perturbée peut
+// encore la regarder : des morceaux de face cachée s'allument.
+// Solution : la normal map donne la FORME de l'éclairage ; la normale géométrique (VertexNormalWS)
+// sert de garde-fou, avec un fondu doux pour rester sans bande.
+
+/**
+ * Masque 0..1 : 0 quand la vraie surface tourne le dos à la lumière, 1 quand elle lui fait face.
+ * Softness : demi-largeur du fondu autour du terminateur géométrique (en cosinus, ex. 0.1).
+ */
+float DwamNormalMapHorizon(float3 GeometricNormal, float3 LightDir, float Softness)
+{
+	const float S = max(Softness, 1e-3);
+	return smoothstep(-S, S, dot(normalize(GeometricNormal), normalize(LightDir)));
+}
+
+/**
+ * N·L avec normal map, protégé par la normale géométrique.
+ * À utiliser comme « LightFactor » du diffus et comme masque du spéculaire.
+ */
+float DwamGuardedNdotL(float3 MappedNormal, float3 GeometricNormal, float3 LightDir, float Softness)
+{
+	const float3 L = normalize(LightDir);
+	return saturate(dot(normalize(MappedNormal), L)) * DwamNormalMapHorizon(GeometricNormal, L, Softness);
+}
+
+// -------------------------------------------------------------------------------------
+// 2. Origine des rayons d'ombre
+// -------------------------------------------------------------------------------------
+
+/**
+ * Point de départ d'un rayon d'ombre (ray-march SDF) : décalé le long de la normale GÉOMÉTRIQUE
+ * (jamais celle de la normal map), davantage aux angles rasants. Évite l'acné et les fuites.
+ */
+float3 DwamShadowRayOrigin(float3 WorldPos, float3 GeometricNormal, float3 LightDir, float Bias)
+{
+	const float3 N = normalize(GeometricNormal);
+	const float NdotL = dot(N, normalize(LightDir));
+	const float Slope = clamp(1.0 / max(NdotL, 0.15), 1.0, 6.0);
+	return WorldPos + N * max(Bias, 2.0) * Slope;
+}
+
+// -------------------------------------------------------------------------------------
+// 3. Diffus en OKLab
+// -------------------------------------------------------------------------------------
+//
+// Même intention que ShadeDiffuseOklch (Shader_OKLCH), calculée en OKLab :
+//   - L : réponse en ÉNERGIE (le L d'OKLab ≈ racine cubique de la luminance) ;
+//   - chroma : niveau de base lumière/ombre, boost gaussien au terminateur (le liseré), effondrement
+//     scotopique — tout se fait en multipliant (a, b), sans trigonométrie ;
+//   - teinte : rotation de (a, b), maximale dans l'ombre — un sincos, pas d'atan2 ni de fmod.
+//
+// Corrections par rapport aux versions précédentes :
+//   - le scotopique dépend de l'ÉCLAIREMENT (t), pas de la clarté de l'objet (L) : un objet sombre
+//     en plein soleil ne doit pas se désaturer comme la nuit ;
+//   - plusieurs lumières : additionner leurs énergies (t) AVANT d'appeler cette fonction, une seule fois.
+
+/** Énergie reçue normalisée : plancher ambiant, courbe du terminateur. */
+float DwamLightEnergy(float LightFactor, float AmbientEnergy, float TerminatorPow)
+{
+	return lerp(AmbientEnergy, 1.0, pow(saturate(LightFactor), max(TerminatorPow, 1e-3)));
+}
+
+/**
+ * Ombrage d'un albédo OKLab selon le facteur d'éclairement (0 = ombre, 1 = pleine lumière).
+ * Renvoie une couleur OKLab (à convertir avec DwamOKLabToLinearSRGB, qui gère le gamut).
+ *
+ * @param AlbedoLab      albédo en OKLab
+ * @param LightFactor    éclairement 0..1 (ex. DwamGuardedNdotL × ombre portée)
+ * @param AmbientEnergy  plancher d'énergie dans l'ombre (0..1)
+ * @param TerminatorPow  > 1 : terminateur serré, ombres larges ; < 1 : l'inverse
+ * @param ChromaInLight  facteur de chroma en pleine lumière (1 = inchangé)
+ * @param BoostCenter    position du liseré coloré (en t, ex. 0.15)
+ * @param BoostWidth     largeur du liseré (en t)
+ * @param ChromaBoost    intensité du liseré (ajout relatif de chroma)
+ * @param ScotopicEnd    sous cet éclairement, la couleur s'éteint (vision nocturne)
+ * @param ScotopicStr    force de l'effondrement scotopique (0..1)
+ * @param HueShift       rotation de teinte maximale dans l'ombre (degrés)
+ * @param HueFalloff     décroissance du shift vers la lumière
+ */
+float3 DwamShadeDiffuseOKLab(float3 AlbedoLab, float LightFactor,
+	float AmbientEnergy, float TerminatorPow,
+	float ChromaInLight, float BoostCenter, float BoostWidth, float ChromaBoost,
+	float ScotopicEnd, float ScotopicStr,
+	float HueShift, float HueFalloff)
+{
+	const float T = saturate(LightFactor);
+	const float TCurved = pow(T, max(TerminatorPow, 1e-3));
+
+	// L en énergie
+	const float Energy = lerp(AmbientEnergy, 1.0, TCurved);
+	const float L = AlbedoLab.x * pow(max(Energy, 0.0), 1.0 / 3.0);
+
+	// Chroma : base, liseré gaussien, scotopique (sur l'éclairement)
+	const float CBase = lerp(1.0, ChromaInLight, TCurved);
+	const float D = (T - BoostCenter) / max(BoostWidth, 1e-4);
+	const float Boost = ChromaBoost * exp(-D * D);
+	const float Scotopic = lerp(1.0 - ScotopicStr, 1.0, smoothstep(0.0, max(ScotopicEnd, 1e-4), T));
+	float2 AB = AlbedoLab.yz * ((CBase + Boost) * Scotopic);
+
+	// Teinte : rotation de (a, b)
+	const float Angle = radians(HueShift * pow(1.0 - T, max(HueFalloff, 1e-3)));
+	float S, C;
+	sincos(Angle, S, C);
+	AB = float2(AB.x * C - AB.y * S, AB.x * S + AB.y * C);
+
+	return float3(L, AB);
+}
+
+/**
+ * Variante « L linéaire » (LShadow -> LLight), fidèle à l'ancienne ShadeDiffuseOklch B.
+ * Plus graphique, mais pas cohérente en énergie : à éviter pour sommer plusieurs lumières.
+ */
+float3 DwamShadeDiffuseOKLabLinearL(float3 AlbedoLab, float LightFactor,
+	float LShadow, float LLight, float TerminatorPow,
+	float ChromaInLight, float BoostCenter, float BoostWidth, float ChromaBoost,
+	float ScotopicEnd, float ScotopicStr,
+	float HueShift, float HueFalloff)
+{
+	float3 Lab = DwamShadeDiffuseOKLab(AlbedoLab, LightFactor, 1.0, TerminatorPow,
+		ChromaInLight, BoostCenter, BoostWidth, ChromaBoost, ScotopicEnd, ScotopicStr, HueShift, HueFalloff);
+	const float TCurved = pow(saturate(LightFactor), max(TerminatorPow, 1e-3));
+	Lab.x = AlbedoLab.x * lerp(LShadow, LLight, TCurved);
+	return Lab;
+}
+
+// -------------------------------------------------------------------------------------
+// 4. Spéculaires (toutes en stock)
+// -------------------------------------------------------------------------------------
+//
+// Toutes renvoient un scalaire (à multiplier par la couleur du reflet) et prennent des vecteurs
+// normalisés : N = normale (normal map), L = vers la lumière, V = vers la caméra.
+// Masquage au terminateur : DwamSpecTerminator (doux) — jamais de step dur (source de bande).
+
+/** Fresnel de Schlick. F0 = réflectance à incidence normale (≈ 0.04 pour un diélectrique). */
+float DwamFresnelSchlick(float F0, float CosTheta)
+{
+	const float X = 1.0 - saturate(CosTheta);
+	const float X2 = X * X;
+	return F0 + (1.0 - F0) * X2 * X2 * X;
+}
+
+/** Masque doux du spéculaire au terminateur : 0 à N·L = 0, 1 à N·L >= Softness (ex. 0.25 = ancien ×4). */
+float DwamSpecTerminator(float NdotL, float Softness)
+{
+	return saturate(NdotL / max(Softness, 1e-3));
+}
+
+/** Phong brut : pow(R·V, n). */
+float DwamSpecPhong(float3 N, float3 L, float3 V, float Power)
+{
+	const float3 R = reflect(-L, N);
+	return pow(saturate(dot(R, V)), max(Power, 1.0));
+}
+
+/** Phong normalisé en énergie : (n + 2) / 2π · pow(R·V, n). */
+float DwamSpecPhongNormalized(float3 N, float3 L, float3 V, float Power)
+{
+	const float P = max(Power, 1.0);
+	return (P + 2.0) / (2.0 * DWAM_PI) * DwamSpecPhong(N, L, V, P);
+}
+
+/** Blinn-Phong brut : pow(N·H, n). */
+float DwamSpecBlinnPhong(float3 N, float3 L, float3 V, float Power)
+{
+	const float3 H = normalize(L + V);
+	return pow(saturate(dot(N, H)), max(Power, 1.0));
+}
+
+/** Blinn-Phong normalisé en énergie : (n + 8) / 8π · pow(N·H, n). */
+float DwamSpecBlinnPhongNormalized(float3 N, float3 L, float3 V, float Power)
+{
+	const float P = max(Power, 1.0);
+	return (P + 8.0) / (8.0 * DWAM_PI) * DwamSpecBlinnPhong(N, L, V, P);
+}
+
+/**
+ * Sélecteur : un seul appel, le modèle se choisit avec un paramètre (pratique pour comparer).
+ *   Model 0 = Phong, 1 = Phong normalisé, 2 = Blinn-Phong, 3 = Blinn-Phong normalisé.
+ * Fresnel de Schlick (F0 ; 1 = désactivé) et masque doux au terminateur inclus.
+ */
+float DwamSpecular(int Model, float3 N, float3 L, float3 V, float Power, float F0, float TerminatorSoftness)
+{
+	N = normalize(N);
+	L = normalize(L);
+	V = normalize(V);
+
+	float Lobe;
+	if (Model == 0)      { Lobe = DwamSpecPhong(N, L, V, Power); }
+	else if (Model == 1) { Lobe = DwamSpecPhongNormalized(N, L, V, Power); }
+	else if (Model == 2) { Lobe = DwamSpecBlinnPhong(N, L, V, Power); }
+	else                 { Lobe = DwamSpecBlinnPhongNormalized(N, L, V, Power); }
+
+	// Fresnel sur V·H (Blinn) : cohérent pour tous les modèles
+	const float Fresnel = DwamFresnelSchlick(F0, dot(V, normalize(L + V)));
+	return Lobe * Fresnel * DwamSpecTerminator(dot(N, L), TerminatorSoftness);
+}

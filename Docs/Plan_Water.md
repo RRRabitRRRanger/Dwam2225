@@ -2,7 +2,7 @@
 
 > Accueil : [[00 - Accueil]] · Lié à : [[Plan_PatchTerrain]]
 
-> Statut : **conçu**, décisions principales prises (voir « Décisions »). Rien n'est codé.
+> Statut : **validé** (2026-10-03). Étapes 1 et 2 codées et testées (tests automatiques), étape 3 partielle : plugin `Watershed`, guide [[Guide_Watershed]]. Pas encore testé dans une map.
 
 ## Le problème de départ
 
@@ -136,3 +136,13 @@ Exemple : région de 2 km × 2 km en cellules de 2 m (1 M de cellules).
 - Air : **piégé** (une fuite lente pourra s'ajouter plus tard).
 - Cellules : 2 m par défaut et minimum.
 - Fenêtre simulée : moitié de la clipmap 0 du GDF = 1250 uu de rayon (25 × 25 m), cellules de 50 cm à 1 m (625 à 2 500 cellules) ; les rides fines se font dans le shader.
+
+## Mise en œuvre (2026-10-03)
+
+- Plugin `Watershed` : `FWatershedHierarchy` (C++ pur, sans UObject : construit sur un thread de fond) et l'acteur `AWatershedVolume` (traces de hauteur, sources, pluie, tuiles HISM, debug).
+- **Voisinage à 4** (von Neumann, comme le prototype) : un mur diagonal d'une cellule ne fuit pas.
+- **Plateaux** : les cellules de même hauteur sans voisin plus bas forment un seul creux (sinon une plaine plate donnerait un creux par cellule).
+- **Volume** : somme sur les feuilles du sous-arbre (hauteurs triées + sommes cumulées), niveau par dichotomie. Pas de tranches : précision limitée seulement par la grille.
+- **Eau conservée par cellule** : chaque reconstruction redistribue toute l'eau versée, donc un obstacle qui change la forme des bassins est pris en compte.
+- **Étape 3** : `RebuildRegion` rééchantillonne localement, mais la hiérarchie est reconstruite entièrement (84 ms pour 512 × 512 cellules, en tâche de fond). Reconstruction vraiment locale reportée tant que ce coût ne gêne pas.
+- Tests automatiques : `Watershed.Hierarchy.*` (Session Frontend → Automation).

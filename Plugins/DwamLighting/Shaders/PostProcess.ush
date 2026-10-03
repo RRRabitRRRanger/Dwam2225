@@ -1,0 +1,187 @@
+// =====================================================================================
+// PostProcess.ush — conversion finale de l'image vers l'écran (DWAM)
+//
+// Chemin virtuel : /Plugin/DwamLighting/PostProcess.ush
+// À utiliser dans un matériau de post-process en « Replacing the Tonemapper » : la passe de
+// tonemapping d'Unreal est alors sautée, ce matériau reçoit la couleur HDR linéaire
+// (SceneTexture : PostProcessInput0) et doit faire lui-même : exposition -> courbe -> encodage.
+//
+// Bibliothèque PURE MATHS : aucune fonction du moteur n'est appelée ici. Les données du moteur
+// (couleur de scène, profondeur, paramètres de la MPC, LUT) sont lues dans le graphe ou le nœud
+// Custom, puis passées en paramètres.
+//
+// Contenu :
+//   1. Exposition (en EV)
+//   2. Hable (Uncharted 2)
+//   3. Tony McMapface (LUT 3D 48³, Tomasz Stachowiak, MIT / Apache 2.0)
+//   4. Encodage : sRGB exact ou gamma, réglage de luminosité
+//   5. Éblouissement solaire façon Wind Waker (quantité calculée côté CPU, appliquée ici)
+//   6. Tout-en-un
+// =====================================================================================
+
+#pragma once
+
+// -------------------------------------------------------------------------------------
+// 1. Exposition
+// -------------------------------------------------------------------------------------
+
+/** Exposition en EV (crans) : +1 = deux fois plus clair, -1 = deux fois plus sombre, 0 = neutre. */
+float3 DwamApplyExposure(float3 Color, float ExposureEV)
+{
+	return Color * exp2(ExposureEV);
+}
+
+// -------------------------------------------------------------------------------------
+// 2. Hable (Uncharted 2)
+// -------------------------------------------------------------------------------------
+//
+// Courbe filmique de John Hable (GDC 2010, « Uncharted 2: HDR Lighting »), paramètres d'origine.
+// A = épaule, B = partie linéaire (force), C = angle linéaire, D = pied (force),
+// E = pied (numérateur), F = pied (dénominateur).
+
+float3 DwamHableCurve(float3 X)
+{
+	const float A = 0.15;
+	const float B = 0.50;
+	const float C = 0.10;
+	const float D = 0.20;
+	const float E = 0.02;
+	const float F = 0.30;
+	return ((X * (A * X + C * B) + D * E) / (X * (A * X + B) + D * F)) - E / F;
+}
+
+/**
+ * Hable complet : biais d'exposition d'origine (×2), normalisé par le point blanc.
+ * @param Color       couleur HDR linéaire (déjà exposée)
+ * @param WhitePoint  valeur linéaire qui devient le blanc pur (11.2 à l'origine)
+ * @return            couleur linéaire 0..1 (à encoder ensuite)
+ */
+float3 DwamTonemapHable(float3 Color, float WhitePoint)
+{
+	const float3 Curr = DwamHableCurve(max(Color, 0.0) * 2.0);
+	const float3 WhiteScale = 1.0 / DwamHableCurve(max(WhitePoint, 1e-3).xxx);
+	return saturate(Curr * WhiteScale);
+}
+
+// -------------------------------------------------------------------------------------
+// 3. Tony McMapface
+// -------------------------------------------------------------------------------------
+//
+// D'après https://github.com/h3r2tic/tony-mc-mapface (shader/tony_mc_mapface.hlsl), MIT ou Apache 2.0.
+// La LUT est une texture 3D 48×48×48 : entrée encodée par x / (x + 1), lecture alignée sur les
+// centres de texels. Sortie LINÉAIRE (l'encodage sRGB vient après).
+// Dans Unreal : convertir le .dds avec Tools/ConvertTonyMcMapfaceLut.ps1, l'importer (il devient une
+// Volume Texture), Tiling Method = Clamp. Convention D3D : pas de retournement de V.
+
+#define DWAM_TONY_LUT_DIMS 48.0
+
+/** Coordonnées UVW de lecture de la LUT pour une couleur HDR linéaire (déjà exposée). */
+float3 DwamTonyMcMapfaceUVW(float3 Stimulus)
+{
+	const float3 Encoded = max(Stimulus, 0.0) / (max(Stimulus, 0.0) + 1.0);
+	return Encoded * ((DWAM_TONY_LUT_DIMS - 1.0) / DWAM_TONY_LUT_DIMS) + 0.5 / DWAM_TONY_LUT_DIMS;
+}
+
+/**
+ * Tony McMapface complet.
+ * Dans un nœud Custom, une entrée « Lut » branchée sur un Texture Object (Volume Texture) donne
+ * deux paramètres : Lut (Texture3D) et LutSampler (SamplerState).
+ */
+float3 DwamTonemapTonyMcMapface(float3 Color, Texture3D Lut, SamplerState LutSampler)
+{
+	return Lut.SampleLevel(LutSampler, DwamTonyMcMapfaceUVW(Color), 0).rgb;
+}
+
+// -------------------------------------------------------------------------------------
+// 4. Encodage final
+// -------------------------------------------------------------------------------------
+
+/** Courbe sRGB exacte (OETF par morceaux), entrée linéaire 0..1. */
+float3 DwamLinearToSRGB(float3 C)
+{
+	C = saturate(C);
+	const float3 Low  = C * 12.92;
+	const float3 High = 1.055 * pow(C, 1.0 / 2.4) - 0.055;
+	return lerp(Low, High, step(0.0031308, C));
+}
+
+/** Gamma pur : C^(1 / Gamma) (2.2 ≈ sRGB, sans la partie linéaire des noirs). */
+float3 DwamLinearToGamma(float3 C, float Gamma)
+{
+	return pow(saturate(C), 1.0 / max(Gamma, 0.1));
+}
+
+/**
+ * Encodage pour l'écran.
+ * @param C           couleur linéaire 0..1 (sortie de la courbe)
+ * @param UseSRGB     > 0.5 : courbe sRGB exacte ; sinon gamma pur
+ * @param Gamma       gamma de l'écran en mode gamma pur (2.2 par défaut)
+ * @param Brightness  réglage « luminosité » du menu (gamma utilisateur) : 1 = neutre,
+ *                    > 1 éclaircit les tons moyens, < 1 les assombrit ; noir et blanc inchangés
+ */
+float3 DwamEncodeOutput(float3 C, float UseSRGB, float Gamma, float Brightness)
+{
+	C = pow(saturate(C), 1.0 / max(Brightness, 0.1));
+	return UseSRGB > 0.5 ? DwamLinearToSRGB(C) : DwamLinearToGamma(C, Gamma);
+}
+
+// -------------------------------------------------------------------------------------
+// 5. Éblouissement solaire (Wind Waker)
+// -------------------------------------------------------------------------------------
+//
+// Dans Wind Waker (d_kankyo_rain.cpp), quand on regarde le soleil et qu'il est visible, les
+// personnages et le décor s'assombrissent (jusqu'à la silhouette) et le ciel s'éclaircit.
+// Ici, la quantité d'éblouissement (0..1) est calculée côté CPU par UDwamSunGlareComponent :
+// regard = (1 - angle / angle max)^puissance, × visibilité (5 traces vers le soleil), lissée dans
+// le temps. Elle arrive par la MPC. Ce fichier ne fait que l'appliquer.
+// Multiplier la couleur linéaire par un scalaire garde la teinte (en OKLab : L, a, b mis à
+// l'échelle ensemble, l'angle de teinte ne bouge pas).
+
+/**
+ * Masque « ciel » à partir de la profondeur de scène : 0 = objet, 1 = ciel.
+ * @param SceneDepth   SceneTexture : SceneDepth (cm)
+ * @param SkyDistance  au-delà de cette distance, c'est le ciel (ex. 0.9 × rayon de la sphère de ciel)
+ * @param Fade         largeur du fondu (cm)
+ */
+float DwamSkyMask(float SceneDepth, float SkyDistance, float Fade)
+{
+	return smoothstep(SkyDistance - max(Fade, 1.0), SkyDistance, SceneDepth);
+}
+
+/**
+ * Applique l'éblouissement.
+ * @param Color         couleur HDR linéaire
+ * @param Glare         quantité d'éblouissement 0..1 (MPC, écrite par le composant)
+ * @param SkyMask       DwamSkyMask
+ * @param ObjectDarken  assombrissement maximal des objets (1 = silhouette noire, Wind Waker va jusque-là)
+ * @param SkyBoost      éclaircissement maximal du ciel (Wind Waker : 0.5 × une pulsation)
+ */
+float3 DwamApplySunGlare(float3 Color, float Glare, float SkyMask, float ObjectDarken, float SkyBoost)
+{
+	const float G = saturate(Glare);
+	const float Factor = lerp(1.0 - G * saturate(ObjectDarken), 1.0 + G * max(SkyBoost, 0.0), saturate(SkyMask));
+	return Color * Factor;
+}
+
+// -------------------------------------------------------------------------------------
+// 6. Tout-en-un
+// -------------------------------------------------------------------------------------
+
+/**
+ * Exposition -> courbe -> encodage.
+ * @param Mode  0 = aucune courbe (simple écrêtage), 1 = Hable, 2 = Tony McMapface
+ */
+float3 DwamTonemap(float3 SceneColor, float ExposureEV, float Mode, float WhitePoint,
+	Texture3D Lut, SamplerState LutSampler,
+	float UseSRGB, float Gamma, float Brightness)
+{
+	const float3 Exposed = DwamApplyExposure(max(SceneColor, 0.0), ExposureEV);
+	const int M = (int)round(Mode);
+
+	float3 Mapped;
+	if (M == 1)      { Mapped = DwamTonemapHable(Exposed, WhitePoint); }
+	else if (M == 2) { Mapped = DwamTonemapTonyMcMapface(Exposed, Lut, LutSampler); }
+	else             { Mapped = saturate(Exposed); }
+
+	return DwamEncodeOutput(Mapped, UseSRGB, Gamma, Brightness);
+}
