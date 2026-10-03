@@ -31,7 +31,10 @@ L'auteur confie ce coffre aux sessions Claude (2026-10-02) : c'est à elles de l
 | Terrain en surfaces paramétriques | [[Plan_PatchTerrain]] | 🔧 Plugin `PatchTerrain` codé. Étape 1 testée ; maillage adaptatif, rampe à raccord auto, value noise et lattice compilés, pas encore testés |
 | Eau par bassins | [[Plan_Water]] | 📐 Conçu (Watershed), pas codé |
 | Synthèse vocale | [[Plan_KlattVoice]] | 📐 Plan validé, anglais d'abord, pas codé |
-| Éclairage maison (DwamLighting) | — | 💭 Objectif listé dans `CLAUDE.md`, pas encore de plan |
+| GPUTrace (traces sur la géométrie visuelle) | [[Plan_GpuTraces]] · [[Guide_GPUTrace]] | 🔧 Plugin `GPUTrace` compilé, pas testé : moteur CPU utilisable tout de suite (nœud « Async GPU Trace », debug, agent Bug) ; moteur GPU à monter dans Niagara (guide) |
+| Transfert de normales + snake | [[Plan_NormalTransfer]] · [[Guide_NormalTransfer]] | 🔧 `NormalTransfer.ush` validé par compilation HLSL hors moteur ; `Snake Toy` compilé ; matériaux à monter (guide) |
+| Corde (Niagara) | [[Plan_NiagaraRope]] | 📐 Proposition (objectif : enrouler autour d'un objet), en attente de validation |
+| Éclairage maison (DwamLighting) | — | 💭 Squelette du plugin créé (mapping `/Plugin/DwamLighting` des shaders) ; lumières et culling : pas encore de plan |
 
 **Légende** : ✅ fait · 🔧 en cours · 📐 conçu · 💭 idée
 
@@ -40,6 +43,10 @@ L'auteur confie ce coffre aux sessions Claude (2026-10-02) : c'est à elles de l
 - **[[Plan_PatchTerrain]] → [[Plan_Water]]** : le terrain fournit la hauteur du sol et la pente ; l'eau n'en dépend pas.
 - **[[Plan_PatchTerrain]] → DwamLighting** : ombres du terrain (champ de distances, horizon map), POI cuits avec MDF.
 - **[[Plan_Water]] → DwamLighting** : même texture de hauteur ; même chemin GPU (RDG) que le culling de lumières.
+- **[[Plan_GpuTraces]] ↔ [[Plan_PatchTerrain]]** : seules les traces HW Ray Tracing voient le terrain (meshes dynamiques absents du GDF).
+- **[[Plan_NiagaraRope]] → [[Plan_GpuTraces]] / [[Plan_PatchTerrain]]** : la corde collisionne avec le terrain via sa texture de hauteur ou des traces.
+- **[[Plan_NormalTransfer]] → DwamLighting** : la bibliothèque `NormalTransfer.ush` vit dans le plugin `DwamLighting` ; elle alimentera la normale de l'éclairage maison.
+- **[[Plan_GpuTraces]] → [[Plan_NormalTransfer]]** : le snake rampe avec des traces complexes CPU ; il pourra passer sur GPUTrace.
 - **Matériaux du terrain** (étape « Matériaux » de [[Plan_PatchTerrain]]) : l'orientation par cellule Voronoi est réutilisée par l'eau (sens du courant).
 
 ## Conventions
@@ -54,4 +61,5 @@ L'auteur confie ce coffre aux sessions Claude (2026-10-02) : c'est à elles de l
 | Date | Ce qui a été fait |
 |---|---|
 | 2026-10-01 | Exploration du projet (Blueprints, State Trees, shaders HLSL). Plans KlattVoice et PatchTerrain. Plugin `PatchTerrain` : canevas, modificateurs, expressions, tampons. |
-| 2026-10-02 | Maillage adaptatif, value noise, rampe à raccord auto, lattice. Plan Watershed (Fill–Spill–Merge, quadtree implicite, partage CPU/GPU, détection à 2 m). Commit `268f9da` sur la branche `patchterrain-et-plans`. Création de ce coffre. |
+| 2026-10-02 | Maillage adaptatif, value noise, rampe à raccord auto, lattice. Plan Watershed (Fill–Spill–Merge, quadtree implicite, partage CPU/GPU, détection à 2 m). Commit `268f9da` sur la branche `patchterrain-et-plans`. Création de ce coffre. Pointeur vers le coffre ajouté au `CLAUDE.md`. Plans Traces GPU et Corde Niagara (API vérifiées dans le source 5.8). Nuit (auteur absent) : plugin `GPUTrace` (CPU + GPU Niagara, nœud Blueprint asynchrone, debug, agent Bug), squelette `DwamLighting` + `NormalTransfer.ush`, `Snake Toy` ; guides de montage. Tout compile ; rien de testé en éditeur ; rien de commité. |
+| 2026-10-03 | Tests de l'auteur : GPUTrace (moteur CPU) validé en Blueprint ; maillage adaptatif OK ; snake OK mais clignote sur les murs (corrigé : temps de grâce) ; agent Bug corrigé (pas de 10 cm, marge, relance, errance, diagnostics). Comparatif transfert de normales : méthode de l'auteur (`MF_Light2`, gradient GDF à la surface + masque AO) préférée ; ajoutée à `NormalTransfer.ush` (variante C), plus une variante hybride D (deux sondes, base de mélange, sans AO, rejet du sol heuristique). Retard du GDF sur les objets mobiles (« reptation ») documenté avec les réglages à évaluer en fin de projet. |

@@ -1,0 +1,251 @@
+// =====================================================================================
+// NormalTransfer.ush — faux « data transfer » de normales aux intersections (DWAM)
+//
+// Chemin virtuel : /Plugin/DwamLighting/NormalTransfer.ush
+// À mettre dans « Include File Paths » d'un nœud Custom de matériau.
+//
+// Bibliothèque PURE MATHS : aucune fonction du moteur n'est appelée ici.
+// Les données dépendant du moteur (distance field, Custom Primitive Data, positions)
+// sont lues dans le nœud Custom ou par des nœuds standard, puis passées en paramètres.
+//
+// Deux variantes :
+//   A. « Champ »      : distance + gradient du Global Distance Field, sondés au-dessus de la surface.
+//   B. « Analytique » : union lisse de sphères / capsules connues (exacte, sans GDF).
+// =====================================================================================
+
+#pragma once
+
+// -------------------------------------------------------------------------------------
+// Briques communes
+// -------------------------------------------------------------------------------------
+
+/** Distance signée + gradient (direction de la normale) d'un champ de distance. */
+struct FDwamSdf
+{
+	float  D;   // distance signée (cm), négative à l'intérieur
+	float3 G;   // gradient, normalisé
+};
+
+/** Normalisation protégée : renvoie Fallback si le vecteur est quasi nul. */
+float3 DwamSafeNormalize(float3 V, float3 Fallback)
+{
+	const float L2 = dot(V, V);
+	return L2 > 1e-12 ? V * rsqrt(L2) : Fallback;
+}
+
+/** Sphère de centre C et de rayon R, évaluée en P. */
+FDwamSdf DwamSdfSphere(float3 P, float3 C, float R)
+{
+	FDwamSdf S;
+	const float3 V = P - C;
+	const float  L = length(V);
+	S.D = L - R;
+	S.G = L > 1e-6 ? V / L : float3(0, 0, 1);
+	return S;
+}
+
+/** Capsule (segment [A, B], rayon R), évaluée en P. */
+FDwamSdf DwamSdfCapsule(float3 P, float3 A, float3 B, float R)
+{
+	const float3 AB = B - A;
+	const float  T  = saturate(dot(P - A, AB) / max(dot(AB, AB), 1e-6));
+	return DwamSdfSphere(P, A + AB * T, R);
+}
+
+/**
+ * Union lisse de deux champs (smooth min polynomial d'Inigo Quilez), avec son gradient.
+ * K = largeur du raccord (cm). K <= 0 : union dure (min).
+ * Le gradient est le mélange des deux gradients avec le même poids que les distances :
+ * c'est la normale de la surface « fusionnée ».
+ */
+FDwamSdf DwamSmoothUnion(FDwamSdf A, FDwamSdf B, float K)
+{
+	FDwamSdf S;
+	if (K <= 0.0)
+	{
+		const bool bA = A.D < B.D;
+		S.D = bA ? A.D : B.D;
+		S.G = bA ? A.G : B.G;
+		return S;
+	}
+	const float H = saturate(0.5 + 0.5 * (B.D - A.D) / K);
+	S.D = lerp(B.D, A.D, H) - K * H * (1.0 - H);
+	S.G = DwamSafeNormalize(lerp(B.G, A.G, H), A.G);
+	return S;
+}
+
+// -------------------------------------------------------------------------------------
+// A. Variante « champ » (Global Distance Field)
+// -------------------------------------------------------------------------------------
+//
+// Principe : on sonde le GDF en ProbePos = P + N * ProbeDistance.
+//  - Surface isolée : la distance trouvée vaut environ ProbeDistance.
+//  - Jonction concave (deux objets qui se touchent) : une autre surface est plus proche,
+//    la distance est plus petite.
+// Le masque mesure ce « manque » ; la normale est mélangée vers le gradient du champ au point
+// sondé, qui est la normale de l'union des objets (lissée par la résolution du GDF).
+//
+// Branchements typiques dans le matériau :
+//   ProbePos      = Absolute World Position + PixelNormalWS * ProbeDistance
+//   FieldDistance = DistanceToNearestSurface(ProbePos)      (nœud standard)
+//   FieldGradient = DistanceFieldGradient(ProbePos)         (nœud standard, non normalisé)
+// Ces nœuds sont INDISPENSABLES : sans eux, le matériau n'a pas accès au GDF.
+
+/**
+ * @param N              normale monde actuelle (normalisée)
+ * @param ProbeDistance  hauteur de sonde au-dessus de la surface (cm), ~ taille du raccord voulu
+ * @param FieldDistance  distance du GDF au point sondé
+ * @param FieldGradient  gradient du GDF au point sondé
+ * @param Softness       0..1 : douceur d'apparition du masque (0 = franc)
+ * @param Strength       0..1 : force du transfert
+ * @param OutMask        masque de jonction (0 = surface isolée, 1 = plein raccord), utile pour le debug
+ */
+float3 DwamNormalTransferField(float3 N, float ProbeDistance, float FieldDistance, float3 FieldGradient,
+	float Softness, float Strength, out float OutMask)
+{
+	const float Probe   = max(ProbeDistance, 0.01);
+	const float Deficit = saturate(1.0 - FieldDistance / Probe);          // 0 isolé -> 1 collé
+	const float Edge    = max(Softness, 1e-3) * 0.5;
+	OutMask = smoothstep(0.0, 2.0 * Edge, Deficit) * saturate(Strength);
+
+	const float3 G = DwamSafeNormalize(FieldGradient, N);
+	// Si le gradient pointe « dans » la surface (GDF trop grossier ici), on ne transfère pas.
+	OutMask *= saturate(dot(G, N) * 4.0 + 1.0);
+
+	return DwamSafeNormalize(lerp(N, G, OutMask), N);
+}
+
+// -------------------------------------------------------------------------------------
+// B. Variante « analytique » (sphères / capsules voisines)
+// -------------------------------------------------------------------------------------
+//
+// Les positions sont RELATIVES au centre de l'objet ombré (précision assurée loin de l'origine) :
+//   PRel = Absolute World Position - Object Position.
+
+/**
+ * Sphère courante + deux voisines (précédente, suivante), comme pour une chaîne (snake, colonne).
+ * Neighbor = (offset X, Y, Z relatif au centre courant, rayon). Rayon <= 0 : voisine absente.
+ * Renvoie la normale monde de l'union lisse.
+ */
+float3 DwamChainNormal(float3 PRel, float SelfRadius, float4 Prev, float4 Next, float K)
+{
+	FDwamSdf S = DwamSdfSphere(PRel, float3(0, 0, 0), SelfRadius);
+	if (Prev.w > 0.0)
+	{
+		S = DwamSmoothUnion(S, DwamSdfSphere(PRel, Prev.xyz, Prev.w), K);
+	}
+	if (Next.w > 0.0)
+	{
+		S = DwamSmoothUnion(S, DwamSdfSphere(PRel, Next.xyz, Next.w), K);
+	}
+	return S.G;
+}
+
+/**
+ * Normale propre du mesh (N, à la distance 0) fusionnée avec jusqu'à deux capsules voisines.
+ * Pour des pièces rigides sur un squelette : chaque pièce connaît les capsules des os voisins.
+ * CapA0/CapA1 : extrémités de la capsule A (relatives), RadiusA (<= 0 : absente). Idem B.
+ */
+float3 DwamMeshNormalWithCapsules(float3 PRel, float3 N,
+	float3 CapA0, float3 CapA1, float RadiusA,
+	float3 CapB0, float3 CapB1, float RadiusB,
+	float K)
+{
+	FDwamSdf S;
+	S.D = 0.0;          // le pixel est sur la surface du mesh courant
+	S.G = N;
+	if (RadiusA > 0.0)
+	{
+		S = DwamSmoothUnion(S, DwamSdfCapsule(PRel, CapA0, CapA1, RadiusA), K);
+	}
+	if (RadiusB > 0.0)
+	{
+		S = DwamSmoothUnion(S, DwamSdfCapsule(PRel, CapB0, CapB1, RadiusB), K);
+	}
+	return S.G;
+}
+
+// -------------------------------------------------------------------------------------
+// C. Variante « surface » — la méthode de l'auteur (MF_Light2), versionnée
+// -------------------------------------------------------------------------------------
+//
+// Gradient du GDF pris À la surface (sonde de ±1 cm, négligeable devant un voxel de ~20 cm),
+// mélangé à la normale du mesh avec un alpha global. Effet : jonctions fusionnées ET arêtes
+// convexes adoucies, partout, avec une portée qui ne dépend que de la résolution du GDF.
+// Dans MF_Light2 l'alpha combine un paramètre, un réglage par objet (Custom Primitive Data « Ratioblob »)
+// et le DF AO inversé ; ici l'alpha arrive déjà calculé.
+
+/**
+ * @param N              normale monde (normalisée)
+ * @param FieldGradient  gradient du GDF à la surface du pixel
+ * @param Alpha          0 = normale du mesh, 1 = normale du champ
+ */
+float3 DwamNormalTransferSurface(float3 N, float3 FieldGradient, float Alpha)
+{
+	const float3 G = DwamSafeNormalize(FieldGradient, N);
+	return DwamSafeNormalize(lerp(N, G, saturate(Alpha)), N);
+}
+
+// -------------------------------------------------------------------------------------
+// D. Variante « hybride » — mélange qui porte loin, renforcé aux jonctions, sans AO
+// -------------------------------------------------------------------------------------
+//
+// Idée clé : le gradient du GDF pris à une hauteur R au-dessus de la surface est la normale de
+// l'iso-surface « distance = R » de l'union des objets, c'est-à-dire d'une union arrondie de rayon R.
+// Plus la sonde est haute, plus la fusion porte loin (et plus les arêtes s'arrondissent).
+//
+//  - Sonde proche (R1, ex. 5 cm)  : précise, garde la forme.
+//  - Sonde lointaine (R2, ex. 40 cm) : fusion large, « organique ».
+//  - BaseBlend : part de mélange appliquée partout (comme la méthode de l'auteur) ; peut venir
+//    d'un réglage par objet (Custom Primitive Data).
+//  - Renfort de jonction : déficit de distance à chaque sonde (plus petite que R = un autre objet est
+//    proche). Pas d'AO, donc pas de réaction au simple voisinage du sol à distance.
+//  - Rejet du sol : quand la normale fusionnée pointe vers le haut alors que le pixel regarde vers le bas
+//    (dessous d'un objet posé), la fusion est réduite. Heuristique réglable.
+//
+// Branchements : deux paires de nœuds DistanceToNearestSurface / DistanceFieldGradient,
+// aux positions  WorldPos + VertexNormalWS * R1  et  WorldPos + VertexNormalWS * R2.
+
+/**
+ * @param N                normale monde (normalisée)
+ * @param R1, D1, G1       sonde proche : hauteur, distance, gradient
+ * @param R2, D2, G2       sonde lointaine : hauteur, distance, gradient
+ * @param BaseBlend        0..1 : mélange appliqué partout (vers la normale lointaine)
+ * @param JunctionStrength 0..1 : renfort ajouté aux jonctions
+ * @param Softness         0..1 : douceur d'apparition du renfort
+ * @param UpWS             direction « haut » du monde (0, 0, 1)
+ * @param GroundRejection  0..1 : réduction de la fusion avec ce qui est dessous (le sol)
+ * @param OutMask          masque final (debug)
+ */
+float3 DwamNormalTransferHybrid(float3 N,
+	float R1, float D1, float3 G1,
+	float R2, float D2, float3 G2,
+	float BaseBlend, float JunctionStrength, float Softness,
+	float3 UpWS, float GroundRejection,
+	out float OutMask)
+{
+	const float3 GNear = DwamSafeNormalize(G1, N);
+	const float3 GFar  = DwamSafeNormalize(G2, N);
+
+	// Renfort de jonction : le plus fort des deux déficits (la sonde lointaine détecte de plus loin)
+	const float Edge   = max(Softness, 1e-3);
+	const float MNear  = smoothstep(0.0, Edge, saturate(1.0 - D1 / max(R1, 0.01)));
+	const float MFar   = smoothstep(0.0, Edge, saturate(1.0 - D2 / max(R2, 0.01)));
+	const float Junction = max(MNear, MFar);
+
+	// Direction cible : proche de la forme près des jonctions serrées, large ailleurs
+	const float3 Target = DwamSafeNormalize(lerp(GFar, GNear, MNear * (1.0 - MFar * 0.5)), GFar);
+
+	float Mask = saturate(saturate(BaseBlend) + (1.0 - saturate(BaseBlend)) * Junction * saturate(JunctionStrength));
+
+	// Rejet du sol : dessous d'un objet (N vers le bas) dont la normale fusionnée pointe vers le haut
+	const float FacingDown   = saturate(-dot(N, UpWS));
+	const float TargetUp     = saturate(dot(Target, UpWS));
+	Mask *= 1.0 - saturate(GroundRejection) * FacingDown * TargetUp;
+
+	// Ne jamais retourner la normale (GDF trop grossier localement)
+	Mask *= saturate(dot(Target, N) * 4.0 + 1.0);
+
+	OutMask = Mask;
+	return DwamSafeNormalize(lerp(N, Target, Mask), N);
+}
