@@ -1,0 +1,25 @@
+{
+	"FileVersion": 3,
+	"Version": 1,
+	"VersionName": "0.1",
+	"FriendlyName": "GraphKit",
+	"Description": "Graphe générique et réutilisable : nœuds nommés, arêtes avec distance, tags et charge utile libre. Sans position (la géométrie est une couche à part).",
+	"Category": "Other",
+	"CreatedBy": "Alexandre VonDerRopp",
+	"CreatedByURL": "",
+	"DocsURL": "",
+	"MarketplaceURL": "",
+	"SupportURL": "",
+	"CanContainContent": false,
+	"IsBetaVersion": true,
+	"IsExperimentalVersion": false,
+	"Installed": false,
+	"EnabledByDefault": true,
+	"Modules": [
+		{
+			"Name": "GraphKit",
+			"Type": "Runtime",
+			"LoadingPhase": "Default"
+		}
+	]
+}

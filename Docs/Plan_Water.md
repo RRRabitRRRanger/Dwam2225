@@ -146,3 +146,14 @@ Exemple : région de 2 km × 2 km en cellules de 2 m (1 M de cellules).
 - **Eau conservée par cellule** : chaque reconstruction redistribue toute l'eau versée, donc un obstacle qui change la forme des bassins est pris en compte.
 - **Étape 3** : `RebuildRegion` rééchantillonne localement, mais la hiérarchie est reconstruite entièrement (84 ms pour 512 × 512 cellules, en tâche de fond). Reconstruction vraiment locale reportée tant que ce coût ne gêne pas.
 - Tests automatiques : `Watershed.Hierarchy.*` (Session Frontend → Automation).
+
+## Optimisations potentielles (notées le 2026-10-04, à évaluer après les tests de l'auteur)
+
+Rien n'est fait : l'auteur teste d'abord en conditions réelles. Les chiffres des tests (84 ms de construction, 8 ms de pluie) sont des coûts **ponctuels** sur un terrain volontairement défavorable (bruit aléatoire, 41 000 micro-creux sur 1 km²), pas des coûts par frame. Au repos, une frame ne coûte presque rien.
+
+Points à surveiller, non mesurés en jeu :
+
+1. **Pluie continue** : `Add Rain` à chaque frame coûterait environ 8 ms par frame (une opération par cellule). Remède : précalculer le nombre de cellules qui s'écoulent vers chaque creux, puis verser la pluie par creux (une opération par creux). Estimé : moins de 0,5 ms.
+2. **Mise à jour des tuiles** (toutes les 0,25 s quand l'eau bouge) : relit toutes les cellules et reconstruit toutes les tuiles sur le thread de jeu ; c'est la source d'à-coups la plus probable. Remède : si seuls les niveaux changent, déplacer les tuiles en hauteur ; reconstruire la disposition seulement quand le contour d'un lac change, et en tâche de fond.
+3. **Traces de hauteur au Rebuild** (thread de jeu, une par cellule) : risque de figer une frame sur une grande région. Remède : étaler les traces sur plusieurs frames, ou lire la hauteur directement dans PatchTerrain (`GetSurfacePoint`).
+4. **Mesure** : un chronomètre par étape dans le log `LogWatershed` (échantillonnage, construction, distribution, tuiles), pour décider sur des chiffres réels.

@@ -1,0 +1,35 @@
+{
+	"FileVersion": 3,
+	"Version": 1,
+	"VersionName": "0.1",
+	"FriendlyName": "LayoutKit",
+	"Description": "Bâtiments et objets composés comme une interface : des boîtes reliées par un graphe (GraphKit), des tailles fixes ou étirables, des coins arrondis par coin, des attaches sur les côtés.",
+	"Category": "Other",
+	"CreatedBy": "Alexandre VonDerRopp",
+	"CreatedByURL": "",
+	"DocsURL": "",
+	"MarketplaceURL": "",
+	"SupportURL": "",
+	"CanContainContent": true,
+	"IsBetaVersion": true,
+	"IsExperimentalVersion": false,
+	"Installed": false,
+	"EnabledByDefault": true,
+	"Modules": [
+		{
+			"Name": "LayoutKit",
+			"Type": "Runtime",
+			"LoadingPhase": "Default"
+		}
+	],
+	"Plugins": [
+		{
+			"Name": "GraphKit",
+			"Enabled": true
+		},
+		{
+			"Name": "LOA",
+			"Enabled": true
+		}
+	]
+}

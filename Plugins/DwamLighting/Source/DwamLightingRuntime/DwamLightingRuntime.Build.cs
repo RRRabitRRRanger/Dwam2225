@@ -12,7 +12,15 @@ public class DwamLightingRuntime : ModuleRules
 		{
 			"Core",
 			"CoreUObject",
-			"Engine"
+			"Engine",
+			"DeveloperSettings"
+		});
+
+		// Envoi des lumières au GPU (Scene View Extension, RDG)
+		PrivateDependencyModuleNames.AddRange(new string[]
+		{
+			"RenderCore",
+			"RHI"
 		});
 	}
 }

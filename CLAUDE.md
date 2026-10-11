@@ -23,12 +23,12 @@ Projet perso Unreal Engine. Réponds et commente en français.
 - Rendu non photoréaliste mais **sans bandes** : contrôle de la hardness, couleur d'ombre, dégradé, liseré coloré au terminateur ombre/lumière.
 - Couleurs travaillées en **OKLab / OKLCH**.
 - Ombres portées calculées en **ray-march sur les Mesh Distance Fields / Global Distance Field**.
-- Données des lumières : actuellement via Material Parameter Collection, en cours de migration vers une **texture N×1 float RGBA**, 2 pixels par lumière, type de lumière encodé en bitwise.
+- Données des lumières : anciennement via Material Parameter Collection ; désormais une **texture N×1 float RGBA** (render target), 2 pixels par lumière, type de lumière encodé en bitwise (`Docs/Plan_Lights.md`).
 
 ## Objectifs à venir
 
 1. Créer un plugin de projet **`Plugins/DwamLighting/`** :
-   - `Source/` : composant qui collecte les vraies `ULightComponent` (lumières « fantômes » avec `bAffectsWorld = false`) et remplit la texture (`UpdateTextureRegions`).
+   - `Source/` : lumières maison (`UDwamLightComponent`, sans lien avec les `ULightComponent` d'Unreal), collectées par un subsystem et écrites dans un render target par une Scene View Extension (décision du 2026-10-11, voir `Docs/Plan_Lights.md`).
    - `Shaders/` : `.ush` / `.usf` du système, mappés via `AddShaderSourceDirectoryMapping` dans `StartupModule` (module en phase `PostConfigInit`, dépendance `RenderCore`).
    - `Content/` : matériaux de base du système.
 2. **Culling des lumières** : reproduire une light grid (froxels) dans une **Scene View Extension** + compute shader, en s'inspirant de `Engine/Source/Runtime/Renderer/Private/LightGridInjection.cpp` et des shaders de light grid du moteur. La grille interne d'Unreal n'est pas accessible aux matériaux (déjà testé).

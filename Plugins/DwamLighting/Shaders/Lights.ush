@@ -1,0 +1,285 @@
+// =====================================================================================
+// Lights.ush — lecture des lumières maison (DWAM)
+//
+// Chemin virtuel : /Plugin/DwamLighting/Lights.ush
+// Inclut Lighting.ush (garde-fou de normal map).
+//
+// Les lumières (UDwamLightComponent) arrivent par une texture RGBA32F d'une ligne, écrite sur
+// le render thread juste avant chaque rendu. Miroir exact de DwamLightTypes.h (C++) :
+//
+//   pixel 0 : nombre de lumières | version | nombre magique | 0        (vrais flottants)
+//   pixel 1 : motif de test (bits bruts)
+//   lumière i, pixel 2 + 2i : position X, Y, Z (translated world) | rayon englobant (portée, + demi-diagonale pour un rect)
+//   lumière i, pixel 3 + 2i : couleur RGB9E5 | orientation | forme | drapeaux   (entiers, bits bruts)
+//
+// Les positions sont en TRANSLATED WORLD (relatives à la caméra) : les comparer à
+// GetTranslatedWorldPosition(Parameters), jamais à la position monde absolue.
+//
+// Contenu :
+//   1. En-tête et test du transport
+//   2. Décodage d'une lumière
+//   3. Éclairement d'une lumière en un point
+//   4. Boucle sur toutes les lumières (référence brute-force)
+// =====================================================================================
+
+#pragma once
+
+#include "/Plugin/DwamLighting/Lighting.ush"
+
+#define DWAM_LIGHTS_FORMAT_VERSION 1.0
+#define DWAM_LIGHTS_MAGIC 2225.0
+#define DWAM_LIGHTS_HEADER_PIXELS 2
+
+#define DWAM_LIGHT_TYPE_POINT 0u
+#define DWAM_LIGHT_TYPE_SPOT 1u
+#define DWAM_LIGHT_TYPE_RECT 2u
+
+// -------------------------------------------------------------------------------------
+// 1. En-tête et test du transport
+// -------------------------------------------------------------------------------------
+
+/** Nombre de lumières à parcourir. 0 si la texture n'a jamais été écrite ou si le format ne correspond pas. */
+uint DwamLightCount(Texture2D LightsTex)
+{
+	const float4 Header = LightsTex.Load(int3(0, 0, 0));
+	const bool bValid = (Header.z == DWAM_LIGHTS_MAGIC) && (Header.y == DWAM_LIGHTS_FORMAT_VERSION);
+	return bValid ? (uint)max(Header.x, 0.0) : 0u;
+}
+
+/**
+ * Test du transport des entiers : le C++ écrit quatre motifs de bits difficiles (NaN, dénormal,
+ * tous les bits, zéro négatif) dans le pixel 1. Vert = relus à l'identique. Rouge = bits altérés.
+ * Bleu = la texture n'est pas (ou pas encore) celle des lumières.
+ */
+float3 DwamLightsSelfTest(Texture2D LightsTex)
+{
+	const float4 Header = LightsTex.Load(int3(0, 0, 0));
+	if (Header.z != DWAM_LIGHTS_MAGIC)
+	{
+		return float3(0.0, 0.0, 1.0);
+	}
+	const uint4 Bits = asuint(LightsTex.Load(int3(1, 0, 0)));
+	const bool bOk = Bits.x == 0x7FC12345u && Bits.y == 0x00000001u && Bits.z == 0xFFFFFFFFu && Bits.w == 0x80000000u;
+	return bOk ? float3(0.0, 1.0, 0.0) : float3(1.0, 0.0, 0.0);
+}
+
+// -------------------------------------------------------------------------------------
+// 2. Décodage d'une lumière
+// -------------------------------------------------------------------------------------
+
+struct FDwamLight
+{
+	float3 Position;        // translated world
+	float  Range;           // cm
+	float3 Color;           // RGB linéaire, température et intensité comprises
+	float3 Axis;            // direction d'émission (spot, rect)
+	float3 Right;           // rect : axe de la largeur
+	float3 Up;              // rect : axe de la hauteur
+	float2 Shape;           // spot : (cos extérieur, cos intérieur) ; rect : (demi-largeur, demi-hauteur)
+	float  FalloffExponent;
+	float  ShadowSoftness;  // 0..1
+	uint   Type;            // DWAM_LIGHT_TYPE_*
+	uint   Layers;          // 8 bits
+	bool   bCastShadow;
+};
+
+/** RGB HDR sur 32 bits : 9 bits par canal, exposant partagé sur 5 bits. */
+float3 DwamUnpackRGB9E5(uint Packed)
+{
+	const float Scale = exp2((float)(Packed >> 27) - 24.0);
+	return float3(Packed & 511u, (Packed >> 9) & 511u, (Packed >> 18) & 511u) * Scale;
+}
+
+/** Direction unitaire en octaédrique, 16 + 16 bits. */
+float3 DwamUnpackAxisOct16(uint Packed)
+{
+	const float2 F = float2(Packed & 0xFFFFu, Packed >> 16) / 65535.0 * 2.0 - 1.0;
+	float3 N = float3(F, 1.0 - abs(F.x) - abs(F.y));
+	const float T = saturate(-N.z);
+	N.x += (N.x >= 0.0) ? -T : T;
+	N.y += (N.y >= 0.0) ? -T : T;
+	return normalize(N);
+}
+
+/** Quaternion unitaire : indice de la plus grande composante (2 bits) + les trois autres (10 bits chacune). */
+float4 DwamUnpackQuatSmallest3(uint Packed)
+{
+	const float3 ABC = (float3(Packed & 1023u, (Packed >> 10) & 1023u, (Packed >> 20) & 1023u) / 1023.0 * 2.0 - 1.0) * 0.70710678;
+	const float D = sqrt(saturate(1.0 - dot(ABC, ABC)));
+	const uint Largest = Packed >> 30;
+	float4 Q;
+	if (Largest == 0u)      { Q = float4(D, ABC.x, ABC.y, ABC.z); }
+	else if (Largest == 1u) { Q = float4(ABC.x, D, ABC.y, ABC.z); }
+	else if (Largest == 2u) { Q = float4(ABC.x, ABC.y, D, ABC.z); }
+	else                    { Q = float4(ABC.x, ABC.y, ABC.z, D); }
+	return normalize(Q);
+}
+
+float3 DwamRotateVector(float4 Q, float3 V)
+{
+	return V + 2.0 * cross(Q.xyz, cross(Q.xyz, V) + Q.w * V);
+}
+
+/** Sphère englobante seule (centre, rayon) : une lecture, pour rejeter une lumière avant de décoder le reste. */
+float4 DwamLoadLightBounds(Texture2D LightsTex, uint Index)
+{
+	return LightsTex.Load(int3(DWAM_LIGHTS_HEADER_PIXELS + Index * 2u, 0, 0));
+}
+
+FDwamLight DwamLoadLight(Texture2D LightsTex, uint Index)
+{
+	const float4 A = DwamLoadLightBounds(LightsTex, Index);
+	const uint4 B = asuint(LightsTex.Load(int3(DWAM_LIGHTS_HEADER_PIXELS + Index * 2u + 1u, 0, 0)));
+
+	FDwamLight Light;
+	Light.Position = A.xyz;
+	Light.Range = A.w;
+	Light.Color = DwamUnpackRGB9E5(B.x);
+
+	const uint Flags = B.w;
+	Light.Type = Flags & 3u;
+	Light.bCastShadow = ((Flags >> 2) & 1u) != 0u;
+	Light.Layers = (Flags >> 3) & 255u;
+	Light.ShadowSoftness = (float)((Flags >> 11) & 255u) / 255.0;
+	Light.FalloffExponent = (float)((Flags >> 19) & 255u) / 16.0;
+
+	Light.Right = float3(0.0, 1.0, 0.0);
+	Light.Up = float3(0.0, 0.0, 1.0);
+	Light.Shape = 0.0;
+
+	if (Light.Type == DWAM_LIGHT_TYPE_RECT)
+	{
+		const float4 Q = DwamUnpackQuatSmallest3(B.y);
+		Light.Axis = DwamRotateVector(Q, float3(1.0, 0.0, 0.0));
+		Light.Right = DwamRotateVector(Q, float3(0.0, 1.0, 0.0));
+		Light.Up = DwamRotateVector(Q, float3(0.0, 0.0, 1.0));
+		Light.Shape = float2(f16tof32(B.z & 0xFFFFu), f16tof32(B.z >> 16));
+		// Le rayon stocké englobe le rectangle : la portée se compte depuis sa surface
+		Light.Range = max(A.w - length(Light.Shape), 1e-2);
+	}
+	else
+	{
+		Light.Axis = DwamUnpackAxisOct16(B.y);
+		if (Light.Type == DWAM_LIGHT_TYPE_SPOT)
+		{
+			Light.Shape = float2(B.z & 0xFFFFu, B.z >> 16) / 65535.0;
+		}
+	}
+	return Light;
+}
+
+// -------------------------------------------------------------------------------------
+// 3. Éclairement d'une lumière en un point
+// -------------------------------------------------------------------------------------
+
+/**
+ * Fondu de distance : 1 au centre, 0 à la portée, sans singularité et sans coupure visible.
+ * L'exposant règle la dureté (petit = large, grand = serré autour du centre).
+ */
+float DwamLightDistanceFalloff(float DistanceSq, float Range, float Exponent)
+{
+	const float X = saturate(1.0 - DistanceSq / max(Range * Range, 1e-4));
+	return pow(X, max(Exponent, 1e-3));
+}
+
+/**
+ * Éclairement reçu d'une lumière en un point, sans la normale ni l'ombre : 1 = pleine lumière.
+ * Multiplier par Light.Color pour la couleur (l'intensité y est déjà).
+ *
+ * @param TranslatedWorldPos  GetTranslatedWorldPosition(Parameters)
+ * @param OutLightDir         direction unitaire du point vers la lumière
+ * @return 0 hors de portée, hors du cône ou derrière le rectangle
+ */
+float DwamLightAttenuation(FDwamLight Light, float3 TranslatedWorldPos, out float3 OutLightDir)
+{
+	float3 ToLight = Light.Position - TranslatedWorldPos;
+	float Shape = 1.0;
+
+	if (Light.Type == DWAM_LIGHT_TYPE_RECT)
+	{
+		// Point du rectangle le plus proche : la lumière vient de là (éclairage doux, sans intégrale)
+		const float3 Local = -ToLight;
+		const float Y = clamp(dot(Local, Light.Right), -Light.Shape.x, Light.Shape.x);
+		const float Z = clamp(dot(Local, Light.Up), -Light.Shape.y, Light.Shape.y);
+		ToLight += Light.Right * Y + Light.Up * Z;
+	}
+
+	const float DistanceSq = dot(ToLight, ToLight);
+	OutLightDir = ToLight * rsqrt(max(DistanceSq, 1e-8));
+
+	if (Light.Type == DWAM_LIGHT_TYPE_SPOT)
+	{
+		const float CosTheta = dot(-OutLightDir, Light.Axis);
+		const float T = saturate((CosTheta - Light.Shape.x) / max(Light.Shape.y - Light.Shape.x, 1e-4));
+		Shape = T * T;
+	}
+	else if (Light.Type == DWAM_LIGHT_TYPE_RECT)
+	{
+		// Un seul côté émet
+		Shape = saturate(dot(-OutLightDir, Light.Axis));
+	}
+
+	return DwamLightDistanceFalloff(DistanceSq, Light.Range, Light.FalloffExponent) * Shape;
+}
+
+// -------------------------------------------------------------------------------------
+// 4. Boucle sur toutes les lumières (référence brute-force)
+// -------------------------------------------------------------------------------------
+
+/**
+ * Somme, en RGB linéaire, de couleur × éclairement × N·L pour toutes les lumières de la texture.
+ * Le soleil n'en fait pas partie. Pas d'ombre portée.
+ *
+ * C'est la référence : le culling devra donner exactement la même image.
+ *
+ * @param TranslatedWorldPos  GetTranslatedWorldPosition(Parameters)
+ * @param MappedNormal        normale avec normal map (monde)
+ * @param GeometricNormal     normale du maillage (monde), garde-fou
+ * @param NormalSoftness      fondu du garde-fou au terminateur (ex. 0.1)
+ * @param ReceiverLayers      masque de layers du matériau (255 = tous)
+ */
+float3 DwamAccumulateLights(Texture2D LightsTex, float3 TranslatedWorldPos, float3 MappedNormal, float3 GeometricNormal,
+	float NormalSoftness, uint ReceiverLayers)
+{
+	float3 Sum = 0.0;
+	const uint Count = DwamLightCount(LightsTex);
+
+	[loop] for (uint Index = 0u; Index < Count; ++Index)
+	{
+		// Rejet par la sphère englobante avant tout décodage
+		const float4 Bounds = DwamLoadLightBounds(LightsTex, Index);
+		const float3 ToCenter = Bounds.xyz - TranslatedWorldPos;
+		if (dot(ToCenter, ToCenter) > Bounds.w * Bounds.w)
+		{
+			continue;
+		}
+
+		FDwamLight Light = DwamLoadLight(LightsTex, Index);
+		if ((Light.Layers & ReceiverLayers) == 0u)
+		{
+			continue;
+		}
+
+		float3 LightDir;
+		const float Attenuation = DwamLightAttenuation(Light, TranslatedWorldPos, LightDir);
+		if (Attenuation > 0.0)
+		{
+			Sum += Light.Color * (Attenuation * DwamGuardedNdotL(MappedNormal, GeometricNormal, LightDir, NormalSoftness));
+		}
+	}
+	return Sum;
+}
+
+/** Nombre de lumières dont la portée atteint ce point : à afficher pour juger le coût par pixel. */
+float DwamLightsInRange(Texture2D LightsTex, float3 TranslatedWorldPos)
+{
+	float Num = 0.0;
+	const uint Count = DwamLightCount(LightsTex);
+	[loop] for (uint Index = 0u; Index < Count; ++Index)
+	{
+		const float4 Bounds = DwamLoadLightBounds(LightsTex, Index);
+		const float3 ToCenter = Bounds.xyz - TranslatedWorldPos;
+		Num += (dot(ToCenter, ToCenter) <= Bounds.w * Bounds.w) ? 1.0 : 0.0;
+	}
+	return Num;
+}
