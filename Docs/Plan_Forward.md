@@ -2,7 +2,19 @@
 
 > Accueil : [[00 - Accueil]] · Lié à : [[Plan_Lights]] · [[Plan_LightCulling]] · [[Plan_PostProcess]] · [[Plan_NormalTransfer]] · [[Guide_OKLab]]
 
-> Statut : **décision de l'auteur** (2026-10-12 : « il faut à tout prix passer en forward, dès que possible »). Ce qui attend sa validation : la liste exacte des réglages ci-dessous et les quatre questions de la fin. **Rien n'est modifié dans le projet** : `Config/DefaultEngine.ini` est intact.
+> Statut : **décision de l'auteur** (2026-10-12 : « il faut à tout prix passer en forward, dès que possible »). **Réglages appliqués le 2026-10-12** dans `Config/DefaultEngine.ini`, avec son accord (« tu pourrais faire tous ces réglages ») : forward activé, Lumen et Nanite coupés, **MSAA 4x** (`r.AntiAliasingMethod=3`, demandé par l'auteur ; à rendre réglable dans le futur menu, voir [[Plan_PostProcess]]). Point de retour : commit `dec4f85`. **Pas encore ouvert dans l'éditeur.**
+
+## ⚠️ À vérifier (auteur, quand il aura le temps)
+
+Noté à la demande de l'auteur le 2026-10-12 ; rien de tout ceci n'a été contrôlé. Dans `Map_SHader_OKLCH_01a`, après la recompilation des shaders :
+
+- [ ] Les ombres portées en ray-march sur le GDF sont toujours là (sinon : `r.DistanceFieldAO 1`, `r.AOGlobalDistanceField 1`, `ShowFlag.VisualizeGlobalDistanceField 1`).
+- [ ] Aucun matériau en erreur dans l'Output Log (« GBuffer scene textures not available with forward shading »).
+- [ ] Le transfert de normales (`MF_Light2`) rend comme avant.
+- [ ] Le post-process maison rend comme avant, MSAA compris.
+- [ ] Les lumières `Dwam Light` sont visibles.
+- [ ] Le MSAA 4x convient (bords de géométrie lissés ; le crénelage produit par le shader ne l'est pas).
+- [ ] Pas de mesh qui a perdu du détail à cause de Nanite coupé.
 
 ## Pourquoi (auteur, 2026-10-11)
 
@@ -52,7 +64,7 @@ Dans *Project Settings → Engine → Rendering*, ou directement dans `Config/De
 | `r.DynamicGlobalIlluminationMethod` | `1` (Lumen) | `0` (None) | Pas de Lumen |
 | `r.Lumen.HardwareRayTracing` | `True` | `False` | Devient inutile ; évite de compiler des shaders pour rien |
 | `r.Nanite.ProjectEnabled` | `True` | `False` (question 1) | Désactivé de fait en forward ; le couper évite de garder les données Nanite |
-| `r.AntiAliasingMethod` | `0` (aucun) | question 2 | Le MSAA devient possible ; `r.MSAACount=4` est déjà réglé |
+| `r.AntiAliasingMethod` | `0` (aucun) | `3` (MSAA, décision de l'auteur du 2026-10-12) | Le MSAA devient possible ; `r.MSAACount=4` est déjà réglé |
 | `r.ReflectionMethod` | `0` | inchangé | Déjà sans Lumen |
 | `r.VertexFoggingForOpaque` | `False` | inchangé | Brouillard par pixel conservé ; à revoir avec le brouillard maison |
 

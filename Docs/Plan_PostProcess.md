@@ -57,6 +57,8 @@ Les réglages du menu doivent survivre à un redémarrage du jeu :
 - le menu modifie la MPC en direct (aperçu immédiat) ; **Appliquer** sauvegarde, **Annuler** recharge la sauvegarde ;
 - en Blueprint, sans subsystem (préférence de l'auteur). Alternative plus tard : une sous-classe C++ de `UGameUserSettings` (fichier `GameUserSettings.ini`, standard d'Unreal pour la résolution, la qualité, etc.).
 
+**Anticrénelage (demande de l'auteur, 2026-10-12)** : le MSAA doit être réglable dans le futur menu. Depuis le passage en forward ([[Plan_Forward]]), le projet est en MSAA 4x. Proposition : une liste « Anticrénelage » (aucun, MSAA 2x, 4x, 8x) dans `S_DisplaySettings`, appliquée par les variables console `r.AntiAliasingMethod` (0 = aucun, 3 = MSAA) et `r.MSAACount` (2, 4, 8) avec le nœud `Execute Console Command`. Le source 5.8 décrit le MSAA comme réglable à l'exécution (`RenderUtils.cpp:1702`) ; **pas testé**.
+
 ## Les deux courbes
 
 - **Hable (Uncharted 2)** : courbe filmique analytique (épaule, pied, point blanc). Rien à importer. Les paramètres d'origine sont repris ; seuls l'exposition et le point blanc sont exposés.
