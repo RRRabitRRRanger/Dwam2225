@@ -8,13 +8,30 @@
 
 Noté à la demande de l'auteur le 2026-10-12 ; rien de tout ceci n'a été contrôlé. Dans `Map_SHader_OKLCH_01a`, après la recompilation des shaders :
 
-- [ ] Les ombres portées en ray-march sur le GDF sont toujours là (sinon : `r.DistanceFieldAO 1`, `r.AOGlobalDistanceField 1`, `ShowFlag.VisualizeGlobalDistanceField 1`).
+- [x] Le forward est actif (auteur, 2026-10-12 : plus de Buffer Visualization).
+- [x] Le GDF est toujours généré (auteur : visible dans *Show → Visualize → Global Distance Field*).
+- [x] Les ombres portées en ray-march sur le GDF : corrigées dans `Untitled_2` (auteur, 2026-10-12) ; `Gym_Shadow` reste à revoir avec le réglage. Historique : **cassées dans `Gym_Shadow`** (auteur, 2026-10-12 : « avec le bon angle tout devient noir » ; pas vues depuis la migration en 5.8 ; le MSAA n'y est pour rien). **Cause probable trouvée ensuite, voir « Le GDF s'éteint » plus bas.** ~~Première hypothèse de Claude~~ (peu probable : dans `Untitled_2`, les ombres tombent juste loin de l'origine) : sans lien avec le forward. Les nœuds Custom de `SHad_ShadowTest` appellent `GetDistanceToNearestSurfaceGlobal(p)` avec une position monde absolue, alors que la surcharge `float3` de 5.8 attend une position *translated world*, relative à la caméra (`GlobalDistanceFieldShared.ush:214`). Correction proposée : `GetDistanceToNearestSurfaceGlobal(DFFastToTranslatedWorld(p, ResolvedView.PreViewTranslation))`. Même piège à surveiller dans `MF_Light2` et `Lighting.ush`.
 - [ ] Aucun matériau en erreur dans l'Output Log (« GBuffer scene textures not available with forward shading »).
 - [ ] Le transfert de normales (`MF_Light2`) rend comme avant.
 - [ ] Le post-process maison rend comme avant, MSAA compris.
 - [ ] Les lumières `Dwam Light` sont visibles.
 - [ ] Le MSAA 4x convient (bords de géométrie lissés ; le crénelage produit par le shader ne l'est pas).
 - [ ] Pas de mesh qui a perdu du détail à cause de Nanite coupé.
+
+## Le GDF s'éteint quand aucun matériau ne le « déclare » (2026-10-12)
+
+**Symptôme** (captures de l'auteur, map `Untitled_2`) : tous les objets en `Shder_Redone` passent au noir, sauf quand un objet en `Shder_Windwaker` ou `Shder_Windwaker1` est à l'écran. Le sol (matériau par défaut) ne change pas.
+
+**Cause** (lue dans le source 5.8 ; **confirmée par l'auteur le 2026-10-12** : la commande de la correction 1 règle le problème ; elle est inscrite dans `DefaultEngine.ini`, section `[SystemSettings]`, à revérifier après un redémarrage de l'éditeur) :
+
+- Le moteur ne met à jour le Global Distance Field que si quelque chose le réclame : `ShouldPrepareGlobalDistanceField` (`DistanceFieldAmbientOcclusion.cpp:764`). Avant, Lumen le réclamait en permanence. Lumen coupé et forward activé, il ne reste que les matériaux visibles marqués `bUsesGlobalDistanceField`.
+- Ce drapeau n'est posé que par les nœuds standard *DistanceToNearestSurface*, *DistanceFieldGradient* et *DistanceFieldApproxAO* (`HLSLMaterialTranslator.cpp:12179`). Un nœud Custom qui appelle `GetDistanceToNearestSurfaceGlobal` directement ne le pose pas.
+- `Shder_Windwaker` utilise ces nœuds ; `Shder_Redone` passe par ses nœuds Custom. Sans Windwaker à l'écran, le GDF n'est plus préparé, la fonction renvoie 0 (aucun clipmap), le ray-march voit un obstacle partout : tout est à l'ombre.
+
+**Corrections possibles**
+
+1. Projet entier : `r.AOGlobalDistanceField.DetailedNecessityCheck 0` (le GDF est alors toujours préparé). À tester dans la console, puis à inscrire dans `DefaultEngine.ini`, section `[SystemSettings]`.
+2. Par matériau : brancher un vrai nœud *DistanceToNearestSurface* sur une entrée du nœud Custom, pour que le matériau déclare lui-même son usage du GDF.
 
 ## Pourquoi (auteur, 2026-10-11)
 

@@ -129,3 +129,17 @@ Le curseur s'appelle **LOA** (*Level of Abstraction*) : du plus abstrait (« gen
 
 - Une composition doit-elle rester modifiable dans la scène, ou devenir un asset figé ?
 - Faut-il des pièces paramétriques elles-mêmes (une poutre dont on règle la longueur), ou seulement des pièces fixes disposées ?
+
+## Ombres et distance field : pièces déjà cuites (idée de l'auteur, 2026-10-12)
+
+Constat : le mesh de LayoutKit est dynamique, donc absent du Global Distance Field ; il n'a ni ombre en ray-march ni transfert de normales. L'option « distance field » des meshes dynamiques est dépréciée et sans effet en 5.8 (`BaseDynamicMeshComponent.h`).
+
+**Idée de l'auteur** : assembler la forme avec des **static meshes déjà cuits** (cube, quart de cylindre, « des trucs du genre »), qui ont chacun leur mesh distance field, pour obtenir une approximation du SDF de l'ensemble. Décision : « on garde comme ça pour l'instant », rien à coder.
+
+Lecture de Claude :
+
+- une boîte aux coins arrondis se décompose en un cube (le cœur), des quarts de cylindre (les arêtes arrondies) et, si les coins sont arrondis dans les trois axes, des huitièmes de sphère ;
+- les pièces étant des assets cuits dans l'éditeur, l'assemblage fonctionnerait aussi pour des bâtiments générés pendant le jeu, là où une cuisson à la volée n'est pas possible (calcul des mesh distance fields réservé à l'éditeur : `À COMPLÉTER`, pas revérifié dans le source) ;
+- à vérifier le moment venu : la tenue du distance field sous une échelle non uniforme (pièces étirées).
+
+Autres pistes notées le même jour, non retenues pour l'instant : un bouton « Bake to Static Mesh » (un asset par forme arrêtée) ; un SDF analytique évalué dans le shader à partir d'une liste de boîtes envoyée comme les lumières ([[Plan_Lights]]).

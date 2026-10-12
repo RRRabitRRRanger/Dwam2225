@@ -81,3 +81,9 @@ Les tuiles sont des plans carrés à la hauteur de leur lac. Le rivage est **par
 ## Algorithme (résumé)
 
 Voir [[Plan_Water]]. Barnes, Callaghan & Wickert (2021), *Fill–Spill–Merge* : creux → remplissage par priorité (étiquettes + cols) → arbre des fusions (union-find, cols du plus bas au plus haut). Volume d'un bassin au niveau h = somme des (h − z) sur ses cellules plus basses que h ; le niveau se retrouve par dichotomie. Code : `Plugins/Watershed/Source/Watershed/Private/WatershedHierarchy.cpp`.
+
+## Retours du premier test dans une map (auteur, 2026-10-12)
+
+Test sur un terrain bosselé : Watershed Volume, *Rebuild*, *Debug Draw* et *Debug Draw Heights*, *Add Test Rain*. **Ça marche** : les hauteurs échantillonnées s'affichent, un lac apparaît dans la cuvette avec un rivage qui suit le relief. Verdict de l'auteur : « un très bon départ ». La prise en main n'était pas évidente sans lire le guide en entier.
+
+**Demande de l'auteur** : revoir ensemble les **debug minimaux** à prévoir, « surtout en C++ » (pour ce plugin et les autres). À définir : `À COMPLÉTER`.

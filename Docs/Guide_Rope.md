@@ -79,3 +79,15 @@ Coût, d'après les horodatages des tests : environ **0,2 ms par sous-pas** pour
 - **Le tube** : il est construit avec la même règle d'enroulement des triangles que PatchTerrain. S'il apparaît retourné (on voit l'intérieur), cocher *Two Sided* sur le matériau et me le signaler.
 - Les accroches à des sockets ou des os.
 - Le balayage du décor sur le terrain PatchTerrain (il a une collision).
+
+## Retours du premier test dans l'éditeur (auteur, 2026-10-12)
+
+Test : une sphère avec un composant Rope, secouée à la main, près d'un poteau et d'un mur.
+
+- **Ça marche** : la corde pend, suit la sphère, se pose au sol et s'enroule « assez bien » autour du poteau à la longueur par défaut.
+- **Léger jitter** au repos.
+- **Longueur doublée : l'enroulement ne tient plus**, la corde reste accrochée par quelques points seulement et devient anguleuse. Lecture de Claude (à confirmer) : *Num Segments* n'a pas changé, donc chaque segment est deux fois plus long ; or la collision se fait par nœud, pas par segment, et un segment long coupe à travers l'obstacle. À essayer : doubler aussi *Num Segments*.
+- **Un pli du tube** vu une fois (le tube se pince et se vrille sur lui-même, capture de l'auteur), pas reproduit. Piste de Claude : le repère des sections du tube se retourne quand la corde se replie sur elle-même.
+- La corde a pu être « un peu cassée » en la secouant fort.
+
+**Demande de l'auteur** : à terme, trouver de « vrais » solveurs et s'aligner sur l'état de l'art plutôt que ce solveur maison. Pistes à étudier (Claude, rien de décidé) : XPBD et les petits pas de temps (Macklin), les tiges de Cosserat en PBD (Kugelstadt), la collision par segment (capsules) au lieu de par nœud, et pour l'enroulement les cordes « à points de contact » des jeux (segments tendus entre des points d'appui ajoutés et retirés).

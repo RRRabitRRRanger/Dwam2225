@@ -4,6 +4,8 @@
 
 > État (2026-10-11) : le code compile, les tests du packing passent, `Lights.ush` est validé par compilation hors moteur. **Rien n'a encore été vu dans l'éditeur** : ce guide est le premier essai. Si une étape ne donne pas le résultat annoncé, c'est une information utile, pas une erreur de manipulation.
 
+> **2026-10-12** : premier essai par l'auteur, en forward. Render target créé, matériau de test monté : **vert dans la scène**. Le transport fonctionne (texture écrite, entiers intacts). Puis une `Dwam Light` posée et un matériau branché sur `DwamAccumulateLights` : **la lumière éclaire la surface** (« trop bien ! »). Confirmé ensuite par l'auteur (« tout ça fonctionne ») : la tache reste collée quand la caméra bouge, spot et rect, plusieurs lumières qui s'additionnent, layers.
+
 ## 1. Créer le render target (une fois)
 
 1. *Content Browser* → réglages (en haut à droite) → cocher **Show Plugin Content**.
