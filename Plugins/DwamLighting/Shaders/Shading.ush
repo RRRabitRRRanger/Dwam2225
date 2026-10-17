@@ -1,0 +1,67 @@
+// =====================================================================================
+// Shading.ush — le diffus complet en un appel (DWAM)
+//
+// Chemin virtuel : /Plugin/DwamLighting/Shading.ush
+// Inclut OKLab.ush, Lighting.ush et Lights.ush : un seul include suffit dans le nœud Custom.
+//
+// Soleil + lumières maison, style en OKLab (terminateur, liseré, scotopique, teinte d'ombre),
+// couleur des lumières selon la physique (albédo × lumière reçue).
+// Pas de spéculaire, pas d'ombre des lumières locales.
+// =====================================================================================
+
+#pragma once
+
+#include "/Plugin/DwamLighting/OKLab.ush"
+#include "/Plugin/DwamLighting/Lights.ush"
+
+/**
+ * Diffus d'une surface éclairée par une lumière reçue quelconque (déjà sommée).
+ *
+ * @param AlbedoLinear  albédo, RGB linéaire
+ * @param Irradiance    lumière reçue, RGB linéaire (N·L et ombres déjà comptés)
+ * @param AmbientColor  couleur de l'ambiant (1, 1, 1 = neutre)
+ * @param AmbientEnergy plancher d'énergie dans l'ombre (0..1)
+ * @param TerminatorPow > 1 : terminateur serré ; < 1 : l'inverse
+ * @param ChromaStyle   x = chroma en pleine lumière, y = position du liseré, z = sa largeur, w = son intensité
+ * @param ShadowStyle   x = seuil scotopique, y = force scotopique, z = rotation de teinte (degrés), w = sa décroissance
+ * @return couleur RGB linéaire
+ */
+float3 DwamShadeDiffuseLit(float3 AlbedoLinear, float3 Irradiance,
+	float3 AmbientColor, float AmbientEnergy, float TerminatorPow,
+	float4 ChromaStyle, float4 ShadowStyle)
+{
+	const float T = DwamIrradianceStrength(Irradiance);
+
+	const float3 Lab = DwamShadeDiffuseOKLab(DwamLinearSRGBToOKLab(AlbedoLinear), T,
+		AmbientEnergy, TerminatorPow,
+		ChromaStyle.x, ChromaStyle.y, ChromaStyle.z, ChromaStyle.w,
+		ShadowStyle.x, ShadowStyle.y, ShadowStyle.z, ShadowStyle.w);
+
+	return DwamOKLabToLinearSRGB(Lab) * DwamIrradianceTint(Irradiance, AmbientColor, AmbientEnergy, TerminatorPow);
+}
+
+/**
+ * Tout le diffus d'un matériau en un appel : soleil + lumières maison.
+ *
+ * @param LightsTex          Texture Object -> RT_DwamLights
+ * @param TranslatedWorldPos GetTranslatedWorldPosition(Parameters)
+ * @param MappedNormal       normale avec normal map (monde)
+ * @param GeometricNormal    normale du maillage (monde)
+ * @param NormalSoftness     fondu du garde-fou de normal map (ex. 0.1)
+ * @param ReceiverLayers     masque de layers du matériau (255 = tous)
+ * @param SunDir             direction VERS le soleil (monde)
+ * @param SunColor           couleur × intensité du soleil (1, 1, 1 = pleine lumière blanche)
+ * @param SunShadow          ombre portée du soleil (1 = éclairé, 0 = à l'ombre) ; 1 si pas d'ombre
+ * Les autres paramètres : voir DwamShadeDiffuseLit.
+ */
+float3 DwamShadeSurface(Texture2D LightsTex, float3 TranslatedWorldPos,
+	float3 MappedNormal, float3 GeometricNormal, float NormalSoftness, uint ReceiverLayers,
+	float3 AlbedoLinear, float3 SunDir, float3 SunColor, float SunShadow,
+	float3 AmbientColor, float AmbientEnergy, float TerminatorPow,
+	float4 ChromaStyle, float4 ShadowStyle)
+{
+	float3 Irradiance = SunColor * (DwamGuardedNdotL(MappedNormal, GeometricNormal, SunDir, NormalSoftness) * saturate(SunShadow));
+	Irradiance += DwamAccumulateLights(LightsTex, TranslatedWorldPos, MappedNormal, GeometricNormal, NormalSoftness, ReceiverLayers);
+
+	return DwamShadeDiffuseLit(AlbedoLinear, Irradiance, AmbientColor, AmbientEnergy, TerminatorPow, ChromaStyle, ShadowStyle);
+}

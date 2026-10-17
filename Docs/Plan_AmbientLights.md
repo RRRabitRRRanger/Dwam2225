@@ -85,7 +85,7 @@ L'auteur : « ça ne sera pas une implémentation bas niveau », et « il faudra
   - *Pas à chaque frame* : le rebond change lentement. On relance quelques traces par frame, à tour de rôle ; scène et lumières immobiles, on ne relance rien.
   - *Stabilité* : un confetti qui change de place fait scintiller l'ambiance. Un seul émetteur par case du quadtree, à place fixe dans la case, avec un fondu à l'apparition et à la disparition.
   - *La couleur à l'impact* : c'est la vraie limite du « pas bas niveau ». Une trace donne l'acteur et le matériau touchés, pas leur couleur. Il faut une « couleur de rebond » par matériau ou par acteur (réglée à la main ou moyennée une fois), ou bien une capture de scène depuis la lumière (reflective shadow map), plus chère.
-- **Ce que ça ne sera pas** : du Lumen. Un rebond grossier, stylisé, sans ombre ; cohérent avec un rendu non photoréaliste.
+- **Ce que ça ne sera pas** : du Lumen. Un rebond grossier, stylisé, sans ombre ; ~~cohérent avec un rendu non photoréaliste~~ (faux : le rendu n'est pas non photoréaliste, correction de l'auteur du 2026-10-17 ; voir [[Plan_Forward]]).
 - **Conséquence** : juger le résultat à l'étape 3 (à la main) avant d'investir dans les confettis.
 
 ## Un éclairagiste automatique, pas une simulation (auteur, 2026-10-11)

@@ -84,12 +84,19 @@ Le State Tree lit la fiche : un évaluateur expose les valeurs, les tâches s'y 
   - créer une créature = assembler des pièces (kitbash) ;
   - une pièce peut **se briser** ou tomber, comme une arme ([[Plan_Loot]]) ;
   - chaque pièce a sa collision, ce qui sert à l'**escalade**.
+  - **S'accrocher à un PNJ qui bouge devient simple** (validé par l'auteur, 2026-10-17, « excellent ») : un os + un offset local dans la pièce rigide, au lieu de suivre un point sur une peau déformée. C'est la « brique A » du doc « Plan de jeu UE5 » (grimper, chevaucher, planter une arme), présentée là comme l'inconnue la plus risquée ; avec des pièces rigides, elle l'est beaucoup moins.
 - **Plus tard, si le nombre de pièces coûte cher** : regrouper les pièces identiques en instances (un seul appel de rendu par type de pièce).
 
 ## Navigation (auteur, 2026-10-04)
 
 - **Navigation Invokers** : le NavMesh n'est généré qu'autour des acteurs qui portent un *Navigation Invoker* (le joueur, les PNJ actifs), en génération dynamique. C'est la réponse au terrain procédural et aux grandes cartes.
 - À vérifier au montage : le terrain PatchTerrain (Dynamic Mesh) doit **affecter la navigation** (collision activée, *Can Ever Affect Navigation*).
+
+## Règle de capacité (doc de l'auteur, 2026-10-16)
+
+- **Chaque capacité porte qui peut l'exécuter et qui peut la subir**, avec un défaut par capacité (réservée au joueur ou non). À poser dès la fondation.
+- **Interactions PNJ vers PNJ** : composants génériques dès le départ, jamais codés pour le joueur seul. Un PNJ peut grimper sur un autre, le monter, etc.
+- Restent à définir : les règles par défaut de chaque capacité, et la forme du bus d'événements « X affecte Y » qui les porte.
 
 ## Questions ouvertes
 

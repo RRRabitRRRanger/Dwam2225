@@ -95,7 +95,39 @@ Le résultat est la **somme, en RGB linéaire, de toutes les lumières** (couleu
 - **Pour voir tout de suite** : `Albedo × résultat` dans *Emissive Color*.
 - **Position** : toujours `GetTranslatedWorldPosition(Parameters)`. Les lumières sont stockées relativement à la caméra ; la position monde absolue donnerait n'importe quoi.
 
-### Avec le diffus OKLab (proposition, à voir ensemble)
+### Le diffus complet en un nœud : `Shading.ush` (2026-10-12)
+
+**Décision de l'auteur (2026-10-12)** : les lumières colorées suivent le modèle **physique** (albédo × lumière reçue, en RGB linéaire), pas une teinte en OKLab. L'OKLab reste pour le style : terminateur, liseré, scotopique, teinte d'ombre. Comparaison vue sur un visuel interactif ; « physique c'est très bien ».
+
+`Shading.ush` (validé par compilation hors moteur, DXC et FXC ; **pas encore vu dans l'éditeur**) fait tout le diffus en un appel : soleil + lumières maison. Un seul include : `/Plugin/DwamLighting/Shading.ush`.
+
+Nœud **Custom**, *Output Type* CMOT Float 3, entrées dans cet ordre :
+
+| Entrée | Brancher |
+|---|---|
+| `LightsTex` | Texture Object → `RT_DwamLights` |
+| `MappedNormal` | `PixelNormalWS` |
+| `VertexNormal` | `VertexNormalWS` |
+| `Albedo` | la couleur de base (RGB) |
+| `SunDir` | `SkyAtmosphereLightDirection` |
+| `SunColor` | Vector Parameter, RGB (blanc = pleine lumière) |
+| `SunShadow` | l'ombre portée du soleil (ray-march), ou une constante `1` |
+| `AmbientColor` | Vector Parameter, RGB (blanc = neutre) |
+| `AmbientEnergy` | Scalar Parameter (ex. 0,1) |
+| `TerminatorPow` | Scalar Parameter (ex. 1,5) |
+| `ChromaStyle` | Vector Parameter, sortie **RGBA** : R = chroma en lumière (1), G = position du liseré (0,15), B = largeur (0,1), A = intensité (0,5) |
+| `ShadowStyle` | Vector Parameter, sortie **RGBA** : R = seuil scotopique (0,05), G = force (0,5), B = rotation de teinte en degrés (20), A = décroissance (2) |
+
+```hlsl
+return DwamShadeSurface(LightsTex, GetTranslatedWorldPosition(Parameters),
+	MappedNormal, VertexNormal, 0.1, 255u,
+	Albedo, SunDir, SunColor, SunShadow,
+	AmbientColor, AmbientEnergy, TerminatorPow, ChromaStyle, ShadowStyle);
+```
+
+Sortie → *Emissive Color*. Avec un soleil et un ambiant blancs et aucune lumière locale, l'image est celle de `DwamShadeDiffuseOKLab` seul. Pour composer autrement (ombres par lumière, spéculaire), les briques sont `DwamIrradianceStrength` et `DwamIrradianceTint` dans `Lighting.ush`.
+
+### ~~Avec le diffus OKLab (proposition, à voir ensemble)~~ — remplacée par la section ci-dessus
 
 `DwamShadeDiffuseOKLab` attend un éclairement de 0 à 1. Une façon simple de le nourrir avec la somme RGB, `Lights` :
 

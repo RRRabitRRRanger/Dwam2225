@@ -91,3 +91,5 @@ Test : une sphère avec un composant Rope, secouée à la main, près d'un potea
 - La corde a pu être « un peu cassée » en la secouant fort.
 
 **Demande de l'auteur** : à terme, trouver de « vrais » solveurs et s'aligner sur l'état de l'art plutôt que ce solveur maison. Pistes à étudier (Claude, rien de décidé) : XPBD et les petits pas de temps (Macklin), les tiges de Cosserat en PBD (Kugelstadt), la collision par segment (capsules) au lieu de par nœud, et pour l'enroulement les cordes « à points de contact » des jeux (segments tendus entre des points d'appui ajoutés et retirés).
+
+Le doc de l'auteur « Plan de jeu UE5 » (2026-10-16) nomme la corde « Cosserat » (brique B : sangles, cheveux qu'on tire pour diriger une monture). Lecture validée par l'auteur (2026-10-17) : c'est une **piste pour ce solveur à l'état de l'art**, pas une remise en cause du plugin actuel.

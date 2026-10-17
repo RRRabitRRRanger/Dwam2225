@@ -160,6 +160,7 @@ Questions ouvertes :
 - **Équilibre** : un pierre-feuille-ciseaux **gigogne** (version poussée de *Destrega*), avec les archétypes à la base ; voir [[Plan_Loot]], section « Équilibrage ».
 - **Archétype et arme sont indépendants** (validé par l'auteur, 2026-10-04). L'**archétype** est le plan de jeu (gestion de la distance et du tempo) : techniques, options de déplacement, stances, profils des jauges. L'**arme** donne les outils et la maniabilité : portée, masse, inertie (le filtre du geste), réaction au contact. Une classe peut **favoriser** des armes sans les imposer. Exemples : un rushdown à la lance (main avancée sur la hampe, estocs enchaînés, talon de la hampe au contact, coincer l'adversaire) ; un zoner à la dague (lancers, pièges et zones interdites comme l'huile enflammée, jeu de jambes, mortel au contact).
 - **Appareils** : l'auteur joue au **clavier / souris** ; la **manette** est nécessaire aussi.
+- **Armes qui se plantent à l'impact** (*God of War* ; doc de l'auteur, 2026-10-16) : la décision « planter ou rebondir » dépend du matériau, de l'angle et de la vitesse, et se teste. L'arme plantée suit le membre touché, même s'il bouge (brique A du doc : attache sur un mesh animé). La pénétration à l'écran relève du visuel. Prolonge la réponse au contact ci-dessus.
 
 ## 8. Interactions (auteur, 2026-10-04)
 

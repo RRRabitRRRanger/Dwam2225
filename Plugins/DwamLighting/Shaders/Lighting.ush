@@ -146,6 +146,47 @@ float3 DwamShadeDiffuseOKLabLinearL(float3 AlbedoLab, float LightFactor,
 	return Lab;
 }
 
+// --- Lumières colorées : modèle physique (décision de l'auteur, 2026-10-12) ---
+//
+// Le diffus ci-dessus travaille avec un éclairement scalaire (0..1). Pour des lumières colorées,
+// on garde ce scalaire pour le STYLE (terminateur, liseré, scotopique, teinte d'ombre), et la
+// COULEUR suit la physique : couleur finale = albédo × lumière reçue, en RGB linéaire.
+//
+//   float  T   = DwamIrradianceStrength(Irradiance);
+//   float3 Rgb = DwamOKLabToLinearSRGB(DwamShadeDiffuseOKLab(AlbedoLab, T, ...));
+//   Rgb *= DwamIrradianceTint(Irradiance, AmbientColor, AmbientEnergy, TerminatorPow);
+//
+// Avec une lumière blanche et un ambiant blanc, le multiplicateur vaut 1 : même image qu'avant.
+
+/**
+ * Force 0..1 d'une lumière reçue en RGB linéaire : sa composante la plus forte.
+ * (Pas la luminance : un rouge pur à pleine intensité est une pleine lumière, pas une pénombre.)
+ */
+float DwamIrradianceStrength(float3 Irradiance)
+{
+	return saturate(max(Irradiance.r, max(Irradiance.g, Irradiance.b)));
+}
+
+/**
+ * Multiplicateur RGB à appliquer au résultat de DwamShadeDiffuseOKLab pour colorer la lumière.
+ * Mélange la couleur de l'ambiant et celle de la lumière reçue, au prorata de leur part d'énergie.
+ * Une lumière plus forte que 1 garde son excédent (HDR).
+ *
+ * @param Irradiance     lumière reçue, RGB linéaire (soleil × N·L × ombre + lumières locales)
+ * @param AmbientColor   couleur de l'ambiant (1, 1, 1 = neutre)
+ * @param AmbientEnergy  le même plancher que celui passé au diffus
+ * @param TerminatorPow  la même courbe que celle passée au diffus
+ */
+float3 DwamIrradianceTint(float3 Irradiance, float3 AmbientColor, float AmbientEnergy, float TerminatorPow)
+{
+	const float T = DwamIrradianceStrength(Irradiance);
+	const float TCurved = pow(T, max(TerminatorPow, 1e-3));
+	const float3 LightTint = Irradiance / max(T, 1e-4);
+
+	const float AmbientPart = AmbientEnergy * (1.0 - TCurved);
+	return (AmbientColor * AmbientPart + LightTint * TCurved) / max(AmbientPart + TCurved, 1e-4);
+}
+
 // -------------------------------------------------------------------------------------
 // 4. Spéculaires (toutes en stock)
 // -------------------------------------------------------------------------------------

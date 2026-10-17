@@ -22,7 +22,7 @@ Noté à la demande de l'auteur le 2026-10-12 ; rien de tout ceci n'a été cont
 
 **Symptôme** (captures de l'auteur, map `Untitled_2`) : tous les objets en `Shder_Redone` passent au noir, sauf quand un objet en `Shder_Windwaker` ou `Shder_Windwaker1` est à l'écran. Le sol (matériau par défaut) ne change pas.
 
-**Cause** (lue dans le source 5.8 ; **confirmée par l'auteur le 2026-10-12** : la commande de la correction 1 règle le problème ; elle est inscrite dans `DefaultEngine.ini`, section `[SystemSettings]`, à revérifier après un redémarrage de l'éditeur) :
+**Cause** (lue dans le source 5.8 ; **confirmée par l'auteur le 2026-10-12** : la commande de la correction 1 règle le problème ; elle est inscrite dans `DefaultEngine.ini`, section `[SystemSettings]` ; l'auteur a confirmé que le réglage tient après un redémarrage de l'éditeur) :
 
 - Le moteur ne met à jour le Global Distance Field que si quelque chose le réclame : `ShouldPrepareGlobalDistanceField` (`DistanceFieldAmbientOcclusion.cpp:764`). Avant, Lumen le réclamait en permanence. Lumen coupé et forward activé, il ne reste que les matériaux visibles marqués `bUsesGlobalDistanceField`.
 - Ce drapeau n'est posé que par les nœuds standard *DistanceToNearestSurface*, *DistanceFieldGradient* et *DistanceFieldApproxAO* (`HLSLMaterialTranslator.cpp:12179`). Un nœud Custom qui appelle `GetDistanceToNearestSurfaceGlobal` directement ne le pose pas.

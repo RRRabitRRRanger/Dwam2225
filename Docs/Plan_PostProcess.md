@@ -92,6 +92,10 @@ Pas d'auto-exposition par histogramme (pompage, perte de lisibilité, réinterpr
 4. Éblouissement solaire (dot + remap + visibilité par profondeur), lissé dans le temps.
 5. Plus tard : palettes d'environnement par zone ; autres réglages du menu.
 
+## Idée ajoutée : impact frames (doc de l'auteur, 2026-10-16)
+
+💭 Pas validé, hors du plan ci-dessus. **2 à 3 frames stylisées à l'impact d'un coup** ; le timing se teste. Précision de l'auteur : le *sakuga* est du contenu d'animation, pas un système. Lié à [[Plan_3C]] (combat).
+
 ## Décisions de mise en œuvre (2026-10-03)
 
 - **Visibilité du soleil par 5 traces CPU** (collision, canal Visibility, complexe) plutôt que par lecture de `SceneDepth` dans le matériau : le lissage dans le temps demande un état d'une frame à l'autre, qu'un matériau de post-process n'a pas. Le composant calcule regard × visibilité, lisse, et écrit `SunGlare` dans la MPC. Limite : un objet sans collision ne cache pas le soleil.

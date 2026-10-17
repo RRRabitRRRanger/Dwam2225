@@ -20,7 +20,7 @@ Projet perso Unreal Engine. Réponds et commente en français.
 ## Système d'éclairage custom (le cœur du projet)
 
 - Matériaux **unlit** avec éclairage calculé à la main (nœuds Custom / HLSL).
-- Rendu non photoréaliste mais **sans bandes** : contrôle de la hardness, couleur d'ombre, dégradé, liseré coloré au terminateur ombre/lumière.
+- Rendu **photoréaliste « à l'ancienne »** (pas de Lumen ni de Nanite, voir `Docs/Plan_Forward.md`), **sans bandes** : contrôle de la hardness, couleur d'ombre, dégradé, liseré coloré au terminateur ombre/lumière.
 - Couleurs travaillées en **OKLab / OKLCH**.
 - Ombres portées calculées en **ray-march sur les Mesh Distance Fields / Global Distance Field**.
 - Données des lumières : anciennement via Material Parameter Collection ; désormais une **texture N×1 float RGBA** (render target), 2 pixels par lumière, type de lumière encodé en bitwise (`Docs/Plan_Lights.md`).
