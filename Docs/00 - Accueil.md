@@ -39,6 +39,7 @@ Ce que l'auteur a posé et qui guide tout le reste. À relire avant de concevoir
 9. **L'équilibre vient des cycles** (pierre-feuille-ciseaux gigogne), pas de chiffres réglés à la main. ([[Plan_Loot]])
 10. **L'arme est un filtre** : sa maniabilité filtre le geste de la main. ([[Plan_3C]])
 11. **Du contrôle, pas de physique subie** : pas d'active ragdoll. ([[Plan_3C]])
+12. **Un niveau de détail cohérent, et de la cohérence dans les détails** (auteur, 2026-10-18). Ça vaut pour tout, pas seulement les personnages : la micro-vie d'un regard, une structure en béton armé peinte, ce qu'on mange. Des techniques connues depuis longtemps (démos techniques, petits moteurs) mais rares en jeu sont à reprendre quand elles servent cette cohérence. ([[Plan_Eyes]], [[Plan_Face]])
 
 ## Systèmes
 
