@@ -37,6 +37,7 @@ Projet perso Unreal Engine. Réponds et commente en français.
 
 - **Ne jamais modifier le moteur** (`C:\Program Files\Epic Games\...`). Tout passe par le projet ou des plugins.
 - **Ne jamais éditer, créer ou supprimer de `.uasset` / `.umap`** : ce sont des binaires gérés par l'éditeur. Si un asset doit changer, explique-moi quoi faire dans l'éditeur.
+  - **Exception (2026-10-25)** : Claude peut faire **créer par l'éditeur**, avec un script Python, des assets de test **uniquement dans `Content/_Claude/`** (dossier effaçable). Jamais à la main, jamais ailleurs. Claude me dit à chaque fois ce qu'il y a créé, pour tester quoi et comment.
 - Ne pas déplacer ou renommer de dossiers dans `Content/` depuis le système de fichiers (les références casseraient) : ça se fait dans l'éditeur.
 - Le code du système d'éclairage va dans `Plugins/DwamLighting/`, pas dans le module de jeu.
 - Avant un changement important, écris d'abord un plan dans `Docs/` et attends ma validation.

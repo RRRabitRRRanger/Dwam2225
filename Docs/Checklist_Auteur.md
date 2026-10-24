@@ -8,7 +8,7 @@
 
 - [x] **A2. Commits** → Claude **commite sans demander** (on peut revenir en arrière), **sur la branche courante**, pas de branche à lui (auteur, 2026-10-25).
 - [x] **A3. Lancer l'éditeur** → **toujours avec sa fenêtre**, pour que l'auteur sache ce qui tourne et ne fasse pas d'erreur en parallèle (auteur, 2026-10-25).
-- [ ] **A1. Assets de test générés** (question pas comprise, reposée dans le chat). Exception à la règle « jamais de `.uasset` » : Claude peut **générer par script Python d'éditeur** des assets de test dans `Content/_Claude/` seulement (préréglages, matériaux de test, Blueprints de démo), jamais à la main, jamais ailleurs ; dossier effaçable à tout moment. Oui / non ?
+- [x] **A1. Assets de test générés** → **oui, dans `Content/_Claude/` seulement**, par script Python d'éditeur (« excellente idée ») ; Claude dit à chaque fois ce qu'il a créé, pour tester quoi et comment (auteur, 2026-10-25). Exception à la règle « jamais de `.uasset` » : Claude peut **générer par script Python d'éditeur** des assets de test dans `Content/_Claude/` seulement (préréglages, matériaux de test, Blueprints de démo), jamais à la main, jamais ailleurs ; dossier effaçable à tout moment. Oui / non ?
 - [ ] **A4. La feuille de route** : les paliers P1 / P2 / P3 et l'ordre J0 → J5 te conviennent ? Ce qui manque, ce qui est en trop ?
 - [ ] **A5. La taille de la 1.0** : combien d'actes, combien d'heures de jeu visées ?
 
