@@ -85,7 +85,9 @@ Ce que Claude ajoute :
 |---|---|---|---|
 | Fiches de PNJ en modules, un squelette, pièces rigides | [[Plan_NPC]] | 1 | |
 | Visages expressifs : pièces façon stop motion, sourcils, bouche par la synthèse vocale | [[Plan_Face]] | 1 | « Vague idée à mettre au point » (17/10) ; dialogues à la Skyrim, Deus Ex, Mass Effect |
-| Éditeur de personnage complet, tête modulaire | [[Plan_Face]] | 0 | Demandé par l'auteur (17/10) : mailler une tête entière est complexe, d'où les modules |
+| Mannequin : assembler un personnage (pièces sur os, profil, ancres) | [[Plan_Mannequin]] | 4 | M1 compilé le 21/10, à tester ; plan validé (+ outils de forme M7) ; base des yeux, bouche, vêtements |
+| Éditeur de personnage complet, tête modulaire | [[Plan_Face]] · [[Plan_Mannequin]] | 1 | Demandé par l'auteur (17/10) : mailler une tête entière est complexe, d'où les modules |
+| Habiller, déshabiller comme on déballe (manche, gant d'armure, pantalon) | — | 1 | Idée de l'auteur (21/10) : vêtements = meshes par os échangés à la Skyrim ; retirer = ouvrir, glisser le long de l'os (l'os sert d'axe, rayon tissu ≥ rayon membre), séparer puis swap. Cas : rigide (glisse), souple (glisse + accordéon, retournement), passage d'un os à l'autre (coude, main, genou, pied). Commencer bras tendu. Masque de profondeur pour les derniers mm. État de l'art à chercher avant tout aperçu |
 | Yeux en nombre libre, placés n'importe où | [[Plan_Eyes]] | 1 | Pas forcément par paire, troisième œil possible ; miroir réglage par réglage |
 | Foules, escouades, tokens d'attaque | [[Plan_FactionAI]] | 1 | Pas de Mass |
 | Factions organiques, théorie des jeux (Eiréné Nexus) | [[Plan_EireneNexus]] | 1 | |

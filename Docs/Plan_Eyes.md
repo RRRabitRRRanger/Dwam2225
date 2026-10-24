@@ -160,6 +160,11 @@ Proposition : **une petite bande de géométrie procédurale pour les cils seule
 | U7 | Coupure précoce, LOD selon la taille à l'écran, mesures | 10 PNJ en 1080p dans le budget fixé |
 | Plus tard | Peau autour (cernes, poches, rides), rig ou drivers de l'auteur | — |
 
+### Avancement
+
+- **U1 fait (2026-10-18)** : plugin `Plugins/SDFEyes/` (module `SDFEyes`, PostConfigInit, chemin virtuel `/Plugin/SDFEyes`) ; `Shaders/Eyelids.ush`, portage de la démo v2 : réglages `FSDFEyeShape` (mêmes noms que le JSON de la démo, défauts de l'auteur), `FSDFEyeAnim`, `SDFEyes_Derive` (ce que le component calculera), `SDFEyes_Map`, `SDFEyes_Trace` (cils traversés entre les brins, rayon épuisé accepté), `SDFEyes_Normal`, `SDFEyes_SoftShadow`, `SDFEyes_AO`, `SDFEyes_Surface`, `SDFEyes_DebugColor` (vue des parties), `SDFEyes_DemoShade` (éclairage de la démo, pour comparer en U2). Repère : globe de rayon 1, -X = nez. Pas de plan du visage : dans Unreal, c'est le mesh. **Validé par compilation hors moteur** (DXC SM6 sans avertissement ; FXC SM5 avec deux avertissements bénins : `#pragma once`, et un `pow` sur une valeur toujours positive) ; **le module C++ compile**. Rien de vu dans l'éditeur.
+- **U2 préparé (2026-10-18)** : [[Guide_SDFEyes]], montage pas à pas d'un matériau de test sur une sphère (paramètres aux noms du JSON de la démo, nœud Custom avec 28 entrées). Le code du nœud est validé par compilation hors moteur. **À faire par l'auteur dans l'éditeur** ; jalon : la même image que la démo.
+
 ### Pièges connus (démo, recherche et moteur)
 
 1. **Distances** : r·sin(écart), pas l'écart en arc, qui surestime la distance et fait traverser la paupière au rayon. Corriger par la pente du profil.

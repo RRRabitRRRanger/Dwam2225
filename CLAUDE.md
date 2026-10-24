@@ -40,7 +40,9 @@ Projet perso Unreal Engine. Réponds et commente en français.
 - Ne pas déplacer ou renommer de dossiers dans `Content/` depuis le système de fichiers (les références casseraient) : ça se fait dans l'éditeur.
 - Le code du système d'éclairage va dans `Plugins/DwamLighting/`, pas dans le module de jeu.
 - Avant un changement important, écris d'abord un plan dans `Docs/` et attends ma validation.
-- Ne pas modifier `.gitignore`, `.gitattributes` ni faire de commit sans me demander.
+- Ne pas modifier `.gitignore`, `.gitattributes` sans me demander.
+- **Commits** : Claude commite sans demander, sur la branche courante, un commit par lot (décision du 2026-10-25). Ne pas pousser sans accord.
+- **Lancer l'éditeur** (tests automatiques compris) : toujours **avec sa fenêtre**, pour que je voie ce qui tourne.
 - Suivre les conventions Unreal : préfixes `A` (Actor), `U` (UObject), `F` (struct), `E` (enum), `I` (interface), `T` (template) ; macros `UCLASS` / `UPROPERTY` / `UFUNCTION`.
 
 ## Compiler

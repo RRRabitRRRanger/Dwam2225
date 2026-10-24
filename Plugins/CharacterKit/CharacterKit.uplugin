@@ -1,0 +1,25 @@
+{
+	"FileVersion": 3,
+	"Version": 1,
+	"VersionName": "0.1",
+	"FriendlyName": "Character Kit",
+	"Description": "Mannequin en pièces rigides : un asset décrit les pièces (mesh, os, décalage), un component les attache au squelette animé.",
+	"Category": "Animation",
+	"CreatedBy": "Alexandre VonDerRopp",
+	"CreatedByURL": "",
+	"DocsURL": "",
+	"MarketplaceURL": "",
+	"SupportURL": "",
+	"CanContainContent": true,
+	"IsBetaVersion": true,
+	"IsExperimentalVersion": false,
+	"Installed": false,
+	"EnabledByDefault": true,
+	"Modules": [
+		{
+			"Name": "CharacterKit",
+			"Type": "Runtime",
+			"LoadingPhase": "Default"
+		}
+	]
+}

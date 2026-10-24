@@ -1,0 +1,427 @@
+// =====================================================================================
+// Eyelids.ush — paupières dessinées sans mesh (plugin SDFEyes)
+//
+// Chemin virtuel : /Plugin/SDFEyes/Eyelids.ush
+// Portage de la démo « Paupières en pivot » v2 (Docs/Plan_Eyes.md, étape U1).
+//
+// Repère de l'œil (« espace œil ») :
+//   - centre du globe à l'origine, rayon du globe = 1 (l'appelant met à l'échelle) ;
+//   - +Z = regard au repos (vers l'extérieur du visage), +Y = haut ;
+//   - -X = coin interne (nez), +X = coin externe (tempe). Pour l'autre œil, l'appelant inverse X.
+//
+// Principe : chaque bord de paupière est une hauteur sur le globe (élévation) qui varie du coin
+// interne au coin externe : son profil. Bas <= fermeture <= haut <= pli par construction, donc les
+// courbes ne se croisent qu'aux coins. La paupière est une coque autour du globe, coupée par le profil,
+// avec un bord arrondi. Tout est une fonction de distance signée (SDF), ray-marchée dans le matériau.
+//
+// Usage typique dans un nœud Custom (unlit) :
+//   FSDFEyeShape S = SDFEyes_DefaultShape();  ... (réglages)
+//   FSDFEyeAnim  A = SDFEyes_DefaultAnim();   ... (clignement, regard, pupille)
+//   FSDFEyeParams P = SDFEyes_Derive(S, A);
+//   FSDFEyeHit H = SDFEyes_Trace(RayOrigin, RayDir, MaxDist, P);
+//   puis SDFEyes_Normal, SDFEyes_Surface, SDFEyes_SoftShadow, SDFEyes_AO, et l'éclairage maison.
+// =====================================================================================
+
+#pragma once
+
+#define SDFEYES_GLOBE_RADIUS 1.0
+#define SDFEYES_MAX_STEPS 160
+#define SDFEYES_SHADOW_STEPS 40
+
+// ---------- réglages ----------
+
+/** Forme de la paupière : mêmes noms et mêmes unités que le JSON copié depuis la démo. Angles en radians. */
+struct FSDFEyeShape
+{
+	float EU;       // hauteur du sommet du bord supérieur
+	float TU;       // position du sommet : -1 nez .. +1 tempe
+	float PU;       // forme du bord supérieur : < 1 ronde, > 1 pointue
+	float EL;       // hauteur du creux du bord inférieur
+	float TL;       // position du creux
+	float PL;       // forme du bord inférieur
+	float Width;    // demi-écart des coins (azimut)
+	float Tilt;     // inclinaison des coins
+	float Close;    // ligne de fermeture : 0 bas .. 1 haut
+	float FoldGap;  // distance du pli au bord
+	float Fold;     // profondeur du pli
+	float Hood;     // pli qui tombe côté tempe
+	float Thick;    // épaisseur de la paupière
+	float Lash;     // longueur des cils
+	float Curl;     // courbure des cils
+	float Car;      // chair du coin interne (caroncule)
+	float Veins;    // veines de la sclère
+};
+
+/** Animation : clignement 0..1, regard en radians, suivi du regard 0..1, rayon angulaire de la pupille. */
+struct FSDFEyeAnim
+{
+	float Blink;
+	float GazeX;
+	float GazeY;
+	float Follow;
+	float Pupil;
+};
+
+/** Réglages dérivés (ce que le component calculera une fois par image sur le CPU). */
+struct FSDFEyeParams
+{
+	float W, BaseEl, Tilt;
+	float ThC, ThU, ThUo, ThL;   // hauteurs : fermeture, haut (clignement compris), haut ouvert, bas
+	float T0U, T0L, PU, PL;
+	float FoldGap, Hood, Gw;
+	float Rm, T, Rout;
+	float Lash, Curl, Car, Veins;
+	float GazeX, GazeY, Pupil;
+	float3 Cin, Cout, Ck;
+};
+
+FSDFEyeShape SDFEyes_DefaultShape()
+{
+	// réglages par défaut de l'auteur (2026-10-17)
+	FSDFEyeShape S;
+	S.EU = 0.22; S.TU = 0.24; S.PU = 0.93; S.EL = -0.22; S.TL = 0.15; S.PL = 1.0;
+	S.Width = 0.62; S.Tilt = 0.10; S.Close = 0.47; S.FoldGap = 0.23; S.Fold = 0.0; S.Hood = 0.5;
+	S.Thick = 0.11; S.Lash = 1.5; S.Curl = 0.32; S.Car = 0.93; S.Veins = 1.0;
+	return S;
+}
+
+FSDFEyeAnim SDFEyes_DefaultAnim()
+{
+	FSDFEyeAnim A;
+	A.Blink = 0.0; A.GazeX = 0.0; A.GazeY = 0.0; A.Follow = 0.6; A.Pupil = 0.13;
+	return A;
+}
+
+float3 SDFEyes_Sph(float Az, float El) { return float3(sin(Az)*cos(El), sin(El), cos(Az)*cos(El)); }
+float SDFEyes_SS(float E0, float E1, float X) { float t = saturate((X - E0)/(E1 - E0)); return t*t*(3.0 - 2.0*t); }
+float SDFEyes_SMin(float A, float B, float K) { float h = saturate(0.5 + 0.5*(B - A)/K); return lerp(B, A, h) - K*h*(1.0 - h); }
+float SDFEyes_SMax(float A, float B, float K) { return -SDFEyes_SMin(-A, -B, K); }
+float SDFEyes_RInter(float A, float B, float R) { float2 u = max(float2(R + A, R + B), 0.0); return min(-R, max(A, B)) + length(u); }
+
+FSDFEyeParams SDFEyes_Derive(FSDFEyeShape S, FSDFEyeAnim A)
+{
+	FSDFEyeParams P;
+	P.T = S.Thick;
+	P.Rm = SDFEYES_GLOBE_RADIUS + 0.012 + 0.5*S.Thick;
+	P.Rout = SDFEYES_GLOBE_RADIUS + 0.012 + S.Thick;
+	P.W = S.Width; P.BaseEl = -0.04; P.Tilt = S.Tilt;
+	P.Cin = P.Rm*SDFEyes_Sph(-S.Width, P.BaseEl - 0.5*S.Tilt);
+	P.Cout = P.Rm*SDFEyes_Sph(S.Width, P.BaseEl + 0.5*S.Tilt);
+	P.T0U = clamp(S.TU + 0.3*A.Follow*A.GazeX, -0.8, 0.8);
+	P.T0L = clamp(S.TL + 0.3*A.Follow*A.GazeX, -0.8, 0.8);
+	// ordre garanti : bas < haut ; la ligne de fermeture est entre les deux
+	const float EL0 = S.EL + 0.5*A.Follow*A.GazeY;
+	const float EUo = max(S.EU + A.Follow*A.GazeY, EL0 + 0.02);
+	const float EC = EL0 + (EUo - EL0)*saturate(S.Close);
+	const float B = saturate(A.Blink);
+	P.ThC = EC; P.ThUo = EUo;
+	P.ThU = lerp(EUo, EC, B);
+	P.ThL = lerp(EL0, EC, B);
+	P.PU = S.PU; P.PL = S.PL; P.FoldGap = S.FoldGap; P.Hood = S.Hood;
+	P.Gw = S.Fold*0.022*(0.35 + 0.65*(1.0 - B));
+	P.Ck = normalize(P.Cin + normalize(P.Cout - P.Cin)*0.08)*1.015;
+	P.Lash = S.Lash; P.Curl = S.Curl; P.Car = S.Car; P.Veins = S.Veins;
+	P.GazeX = A.GazeX; P.GazeY = A.GazeY; P.Pupil = A.Pupil;
+	return P;
+}
+
+// ---------- profils ----------
+
+/** Coordonnées sur le globe : x = azimut / demi-écart des coins (-1 nez, +1 tempe), y = élévation, z = rayon. */
+float3 SDFEyes_Frame(float3 Pos, FSDFEyeParams P)
+{
+	const float r = length(Pos);
+	return float3(atan2(Pos.x, Pos.z)/P.W, asin(clamp(Pos.y/max(r, 1e-6), -1.0, 1.0)), r);
+}
+
+/** Bosse asymétrique : 0 aux coins, 1 au sommet T0 ; Pw = forme. Retourne (valeur, dérivée par unité de t). */
+float2 SDFEyes_Bump(float t, float T0, float Pw)
+{
+	if (abs(t) >= 1.0) return float2(0.0, 0.0);
+	const float w = t < T0 ? 1.0 + T0 : 1.0 - T0;
+	const float a = (t - T0)/w;
+	const float b = max(1.0 - a*a, 1e-4);
+	const float B = pow(b, Pw);
+	return float2(B, clamp(Pw*B/b*(-2.0*a/w), -6.0, 6.0));
+}
+
+// Profils (élévation du bord, dérivée par unité de t). La ligne de fermeture passe par les deux coins.
+float2 SDFEyes_EdgeC(float t, FSDFEyeParams P)
+{
+	const float2 b = SDFEyes_Bump(t, 0.0, 1.0);
+	return float2(P.BaseEl + 0.5*P.Tilt*t + (P.ThC - P.BaseEl)*b.x, 0.5*P.Tilt + (P.ThC - P.BaseEl)*b.y);
+}
+float2 SDFEyes_EdgeU(float t, FSDFEyeParams P) { return SDFEyes_EdgeC(t, P) + (P.ThU - P.ThC)*SDFEyes_Bump(t, P.T0U, P.PU); }
+float2 SDFEyes_EdgeL(float t, FSDFEyeParams P) { return SDFEyes_EdgeC(t, P) + (P.ThL - P.ThC)*SDFEyes_Bump(t, P.T0L, P.PL); }
+float2 SDFEyes_EdgeF(float t, FSDFEyeParams P)
+{
+	const float Hood = 1.0 - P.Hood*SDFEyes_SS(-0.3, 0.9, t);
+	return SDFEyes_EdgeC(t, P) + (P.ThUo - P.ThC)*SDFEyes_Bump(t, P.T0U, P.PU) + P.FoldGap*Hood*SDFEyes_Bump(t, P.T0U, 1.0);
+}
+
+/** Distance signée au bord (> 0 au-dessus) : r·sin(écart d'élévation), corrigée par la pente du profil.
+ *  (Un écart en arc surestime la distance et fait traverser la paupière au rayon.) */
+float SDFEyes_EdgeDist(float3 F, float2 E, FSDFEyeParams P)
+{
+	const float k = E.y/(P.W*max(cos(F.y), 0.2));
+	return F.z*sin(clamp(F.y - E.x, -1.5707963, 1.5707963))/sqrt(1.0 + k*k);
+}
+
+// ---------- cils : une nappe découpée en brins ----------
+
+float SDFEyes_H1(float n) { return frac(sin(n*127.1)*43758.5453); }
+
+/** Up = 1 cils du haut, -1 cils du bas. LC = (position le long du bord, hauteur relative 0..1). */
+float SDFEyes_LashSheet(float3 Pos, float3 F, float2 E, float B, float Up, FSDFEyeParams P, out float2 LC)
+{
+	const float a = Up*SDFEyes_EdgeDist(F, E, P);
+	const float h = length(Pos) - P.Rm;
+	const float L = P.Lash*(Up > 0.0 ? 0.20 : 0.065)*(0.3 + 0.7*sqrt(B))*SDFEyes_SS(1.0, 0.85, abs(F.x)) + 1e-4;
+	const float hc = clamp(h, 0.0, L);
+	const float ac = -0.35*P.T + P.Curl*hc*hc/L;
+	const float k = 2.0*P.Curl*hc/L;
+	LC = float2(F.x, hc/L);
+	return length(float2((a - ac)/sqrt(1.0 + k*k), max(max(-h, h - L), 0.0))) - 0.004;
+}
+
+bool SDFEyes_Strand(float2 LC, float Up)
+{
+	const float N = Up > 0.0 ? 70.0 : 30.0;
+	const float u = (LC.x*0.5 + 0.5)*N, id = floor(u), fr = frac(u);
+	const float c = 0.5 + 0.35*(SDFEyes_H1(id + Up*17.0) - 0.5);
+	const float len = 0.6 + 0.4*SDFEyes_H1(id*3.1 + Up*5.0);
+	if (LC.y > len) return false;
+	return abs(fr - c) < 0.5*lerp(0.34, 0.06, LC.y/len);
+}
+
+// ---------- la scène ----------
+
+// Matières
+#define SDFEYES_MAT_GLOBE 0.0
+#define SDFEYES_MAT_LID_UP 1.0
+#define SDFEYES_MAT_LID_LOW 2.0
+#define SDFEYES_MAT_CARUNCLE 4.0
+#define SDFEYES_MAT_LASH_UP 5.0
+#define SDFEYES_MAT_LASH_LOW 6.0
+
+/** x = distance, y = matière. LashOn = 0 pour ignorer les cils (ombres, AO). */
+float2 SDFEyes_Map(float3 Pos, FSDFEyeParams P, float LashOn)
+{
+	const float3 F = SDFEyes_Frame(Pos, P);
+	const float2 EU = SDFEyes_EdgeU(F.x, P), EL = SDFEyes_EdgeL(F.x, P);
+	const float r = F.z;
+	const float Shell = abs(r - P.Rm) - 0.5*P.T;
+	float Lu = SDFEyes_RInter(Shell, -SDFEyes_EdgeDist(F, EU, P), 0.45*P.T);
+	const float g = P.Gw*SDFEyes_SS(0.0, 0.3, SDFEyes_Bump(F.x, P.T0U, 1.0).x);      // le pli s'efface vers les coins
+	if (g > 0.001) Lu = SDFEyes_SMax(Lu, g - length(float2(r - P.Rout, SDFEyes_EdgeDist(F, SDFEyes_EdgeF(F.x, P), P))), 0.02);
+	const float Ll = SDFEyes_RInter(Shell, SDFEyes_EdgeDist(F, EL, P), 0.45*P.T);
+	float Skin = min(Lu, Ll);
+	float Car = 1e3;
+	if (P.Car > 0.01)
+	{
+		const float3 Rad = P.Car*float3(0.075, 0.055, 0.045);
+		Car = (length((Pos - P.Ck)/Rad) - 1.0)*min(Rad.x, min(Rad.y, Rad.z));
+		Skin = SDFEyes_SMin(Skin, Car, 0.025);
+	}
+	float2 Res = float2(r - SDFEYES_GLOBE_RADIUS, SDFEYES_MAT_GLOBE);
+	if (Skin < Res.x)
+	{
+		float M = Lu < Ll ? SDFEYES_MAT_LID_UP : SDFEYES_MAT_LID_LOW;
+		if (Car < min(Lu, Ll) + 0.012) M = SDFEYES_MAT_CARUNCLE;
+		Res = float2(Skin, M);
+	}
+	if (LashOn > 0.5 && P.Lash > 0.01 && r > P.Rm - 0.06 && r < P.Rm + 0.32)
+	{
+		float2 LC;
+		const float A = SDFEyes_LashSheet(Pos, F, EU, SDFEyes_Bump(F.x, P.T0U, 1.0).x, 1.0, P, LC);
+		if (A < Res.x) Res = float2(A, SDFEYES_MAT_LASH_UP);
+		const float B = SDFEyes_LashSheet(Pos, F, EL, SDFEyes_Bump(F.x, P.T0L, 1.0).x, -1.0, P, LC);
+		if (B < Res.x) Res = float2(B, SDFEYES_MAT_LASH_LOW);
+	}
+	return Res;
+}
+
+struct FSDFEyeHit
+{
+	bool Hit;
+	float T;
+	float3 Pos;
+	float Material;
+};
+
+/** Marche le long du rayon (espace œil) de TMin à TMax. Entre deux cils, le rayon traverse la nappe.
+ *  Un rayon qui épuise ses pas est accepté au dernier point (sinon des trous apparaissent). */
+FSDFEyeHit SDFEyes_Trace(float3 RO, float3 RD, float TMin, float TMax, FSDFEyeParams P)
+{
+	FSDFEyeHit H;
+	H.Hit = false; H.T = TMax; H.Pos = RO + RD*TMax; H.Material = SDFEYES_MAT_GLOBE;
+	float t = TMin;
+	float LashOn = 1.0;
+	bool Exited = false;
+	float2 h = float2(1.0, 0.0);
+	[loop]
+	for (int i = 0; i < SDFEYES_MAX_STEPS; i++)
+	{
+		const float3 Pos = RO + RD*t;
+		h = SDFEyes_Map(Pos, P, LashOn);
+		if (h.x < 0.0004*max(t, 1.0))
+		{
+			if (h.y > 4.5)
+			{
+				const float Up = h.y < 5.5 ? 1.0 : -1.0;
+				const float3 F = SDFEyes_Frame(Pos, P);
+				float2 LC;
+				SDFEyes_LashSheet(Pos, F, Up > 0.0 ? SDFEyes_EdgeU(F.x, P) : SDFEyes_EdgeL(F.x, P),
+					SDFEyes_Bump(F.x, Up > 0.0 ? P.T0U : P.T0L, 1.0).x, Up, P, LC);
+				if (!SDFEyes_Strand(LC, Up)) { LashOn = 0.0; t += 0.012; continue; }
+			}
+			H.Hit = true; H.T = t; H.Pos = Pos; H.Material = h.y;
+			return H;
+		}
+		t += h.x;
+		if (t > TMax) { Exited = true; break; }
+	}
+	if (!Exited)
+	{
+		H.Hit = true; H.T = t; H.Pos = RO + RD*t;
+		H.Material = SDFEyes_Map(H.Pos, P, LashOn).y;
+	}
+	return H;
+}
+
+float3 SDFEyes_Normal(float3 Pos, FSDFEyeParams P)
+{
+	const float2 e = float2(0.0006, -0.0006);
+	return normalize(e.xyy*SDFEyes_Map(Pos + e.xyy, P, 1.0).x + e.yyx*SDFEyes_Map(Pos + e.yyx, P, 1.0).x
+		+ e.yxy*SDFEyes_Map(Pos + e.yxy, P, 1.0).x + e.xxx*SDFEyes_Map(Pos + e.xxx, P, 1.0).x);
+}
+
+/** Ombre douce vers la lumière (direction en espace œil). Les cils ne bloquent pas l'ombre. 1 = éclairé. */
+float SDFEyes_SoftShadow(float3 Pos, float3 L, FSDFEyeParams P)
+{
+	float Res = 1.0, t = 0.015;
+	[loop]
+	for (int i = 0; i < SDFEYES_SHADOW_STEPS; i++)
+	{
+		const float h = SDFEyes_Map(Pos + L*t, P, 0.0).x;
+		Res = min(Res, 9.0*h/t);
+		t += clamp(h, 0.004, 0.08);
+		if (Res < 0.002 || t > 2.5) break;
+	}
+	return saturate(Res);
+}
+
+float SDFEyes_AO(float3 Pos, float3 N, FSDFEyeParams P)
+{
+	float o = 0.0, w = 1.0;
+	[unroll]
+	for (int i = 1; i <= 5; i++)
+	{
+		const float h = 0.025*i;
+		o += w*(h - SDFEyes_Map(Pos + N*h, P, 0.0).x);
+		w *= 0.7;
+	}
+	return saturate(1.0 - 4.0*o);
+}
+
+// ---------- matières ----------
+
+float SDFEyes_Hash3(float3 p) { p = frac(p*0.3183099 + 0.1); p *= 17.0; return frac(p.x*p.y*p.z*(p.x + p.y + p.z)); }
+float SDFEyes_Noise(float3 x)
+{
+	const float3 i = floor(x);
+	float3 f = frac(x); f = f*f*(3.0 - 2.0*f);
+	return lerp(lerp(lerp(SDFEyes_Hash3(i), SDFEyes_Hash3(i + float3(1,0,0)), f.x), lerp(SDFEyes_Hash3(i + float3(0,1,0)), SDFEyes_Hash3(i + float3(1,1,0)), f.x), f.y),
+		lerp(lerp(SDFEyes_Hash3(i + float3(0,0,1)), SDFEyes_Hash3(i + float3(1,0,1)), f.x), lerp(SDFEyes_Hash3(i + float3(0,1,1)), SDFEyes_Hash3(i + float3(1,1,1)), f.x), f.y), f.z);
+}
+float SDFEyes_Veins(float3 n)
+{
+	float v = 0.0, a = 1.0; float3 q = n*5.0;
+	[unroll]
+	for (int i = 0; i < 3; i++) { const float r = 1.0 - abs(2.0*SDFEyes_Noise(q) - 1.0); v += a*pow(r, 14.0); q *= 2.07; a *= 0.55; }
+	return v;
+}
+
+/** Albédo (RGB linéaire), force et dureté du spéculaire, et wrap du diffus, pour un point touché.
+ *  N peut être modifié (cornée bombée). Le globe et l'iris sont provisoires : le globe du prototype
+ *  de l'auteur (Shader_Eyes) les remplacera (étape U4). */
+void SDFEyes_Surface(FSDFEyeHit H, FSDFEyeParams P, inout float3 N, out float3 Albedo, out float Spec, out float SpecPow, out float Wrap)
+{
+	const float3 F = SDFEyes_Frame(H.Pos, P);
+	const float M = H.Material;
+	Albedo = float3(0.74, 0.52, 0.43); Spec = 0.12; SpecPow = 18.0; Wrap = 0.35;
+	if (M < 0.5)
+	{
+		const float3 n0 = normalize(H.Pos), g = SDFEyes_Sph(P.GazeX, P.GazeY);
+		const float3 tx = normalize(cross(float3(0.0, 1.0, 0.0), g)), ty = cross(g, tx);
+		const float3 nl = float3(dot(n0, tx), dot(n0, ty), dot(n0, g));     // repère qui tourne avec le globe
+		const float ang = acos(clamp(nl.z, -1.0, 1.0));
+		const float IrisR = 0.40, Pup = P.Pupil;
+		const float rr = saturate((ang - Pup)/(IrisR - Pup));
+		const float a = atan2(nl.y, nl.x);
+		const float Fib = 0.5 + 0.5*sin(a*46.0 + 5.0*SDFEyes_Noise(float3(cos(a)*3.0, sin(a)*3.0, rr*3.0)));
+		const float Crypt = SDFEyes_Noise(float3(cos(a)*7.0, sin(a)*7.0, rr*6.0));
+		float3 Iris = lerp(float3(0.46, 0.40, 0.18), float3(0.11, 0.30, 0.35), SDFEyes_SS(0.22, 0.42, rr))*(0.62 + 0.45*Fib)*(0.75 + 0.5*Crypt);
+		Iris *= 1.0 - 0.72*SDFEyes_SS(0.8, 1.0, rr);
+		Albedo = lerp(float3(0.88, 0.84, 0.80), float3(0.86, 0.66, 0.62), SDFEyes_SS(0.55, 1.0, abs(F.x)));
+		Albedo = lerp(Albedo, float3(0.62, 0.14, 0.12), clamp(P.Veins*SDFEyes_Veins(nl)*SDFEyes_SS(IrisR + 0.05, IrisR + 0.8, ang), 0.0, 0.75));
+		const float Plica = SDFEyes_SS(-0.72, -0.92, F.x);
+		Albedo = lerp(Albedo, float3(0.86, 0.52, 0.52), 0.65*Plica);
+		Albedo = lerp(Albedo, Iris, SDFEyes_SS(IrisR + 0.012, IrisR - 0.008, ang));
+		Albedo = lerp(Albedo, float3(0.012, 0.012, 0.012), SDFEyes_SS(Pup + 0.008, Pup - 0.008, ang));
+		const float aL = SDFEyes_EdgeDist(F, SDFEyes_EdgeL(F.x, P), P);
+		const float mq = (aL - 0.012)/0.009, Men = exp(-mq*mq);           // ménisque de larme
+		Albedo += float3(0.22, 0.18, 0.18)*Men;
+		N = normalize(lerp(N, normalize(n0 + g*0.35), SDFEyes_SS(IrisR + 0.05, IrisR - 0.05, ang)));   // cornée bombée
+		Spec = 1.6 + 2.0*Men; SpecPow = 150.0; Wrap = 0.0;
+	}
+	else if (M < 2.5)
+	{
+		const float Edge = abs(SDFEyes_EdgeDist(F, M < 1.5 ? SDFEyes_EdgeU(F.x, P) : SDFEyes_EdgeL(F.x, P), P));
+		const float Wet = SDFEyes_SS(0.7*P.T, 0.15*P.T, Edge)*SDFEyes_SS(P.Rm + 0.55*P.T, P.Rm - 0.1*P.T, F.z);   // ligne d'eau
+		Albedo = lerp(float3(0.74, 0.52, 0.43), float3(0.80, 0.42, 0.42), Wet);
+		Spec = 0.15 + 1.2*Wet; SpecPow = lerp(18.0, 90.0, Wet);
+	}
+	else if (M < 4.5)
+	{
+		Albedo = float3(0.82, 0.45, 0.45); Spec = 1.0; SpecPow = 60.0;
+	}
+	else
+	{
+		Albedo = float3(0.045, 0.032, 0.028); Spec = 0.5; SpecPow = 30.0; Wrap = 0.5;
+	}
+}
+
+/** Vue des parties : une couleur par matière, les bords en jaune, le pli en blanc, les coins en noir. */
+float3 SDFEyes_DebugColor(FSDFEyeHit H, FSDFEyeParams P)
+{
+	const float M = H.Material;
+	float3 C = M < 0.5 ? float3(0.55, 0.75, 0.55) : M < 1.5 ? float3(0.85, 0.35, 0.3) : M < 2.5 ? float3(0.3, 0.45, 0.85)
+		: M < 4.5 ? float3(0.85, 0.3, 0.8) : float3(0.1, 0.1, 0.1);
+	const float3 F = SDFEyes_Frame(H.Pos, P);
+	const float OnEye = SDFEyes_SS(P.Rout + 0.04, P.Rout, F.z);
+	const float lU = abs(SDFEyes_EdgeDist(F, SDFEyes_EdgeU(F.x, P), P)), lL = abs(SDFEyes_EdgeDist(F, SDFEyes_EdgeL(F.x, P), P));
+	const float lF = abs(SDFEyes_EdgeDist(F, SDFEyes_EdgeF(F.x, P), P));
+	C = lerp(C, float3(1.0, 0.85, 0.2), SDFEyes_SS(0.008, 0.003, min(lU, lL))*OnEye);
+	C = lerp(C, float3(1.0, 1.0, 1.0), SDFEyes_SS(0.009, 0.004, lF)*step(0.001, P.Gw)*OnEye);
+	C = lerp(C, float3(0.05, 0.05, 0.05), SDFEyes_SS(0.06, 0.04, min(length(H.Pos - P.Cin), length(H.Pos - P.Cout))));
+	return C;
+}
+
+/** Éclairage de la démo (soleil + ambiant), pour comparer avec la démo web à l'étape U2.
+ *  En jeu, l'éclairage maison (DwamShadeSurface) le remplace. L = direction vers la lumière (espace œil). */
+float3 SDFEyes_DemoShade(FSDFEyeHit H, FSDFEyeParams P, float3 RD, float3 L, bool bDebug)
+{
+	float3 N = SDFEyes_Normal(H.Pos, P);
+	float3 Albedo; float Spec, SpecPow, Wrap;
+	SDFEyes_Surface(H, P, N, Albedo, Spec, SpecPow, Wrap);
+	if (bDebug) Albedo = SDFEyes_DebugColor(H, P);
+	const float Sh = SDFEyes_SoftShadow(H.Pos + N*0.002, L, P);
+	const float Ao = SDFEyes_AO(H.Pos, N, P);
+	const float Dif = max(0.0, (dot(N, L) + Wrap)/(1.0 + Wrap));
+	const float3 Sun = float3(1.0, 0.95, 0.88)*1.6;
+	const float3 Amb = float3(0.30, 0.32, 0.38)*0.85;
+	float3 C = Albedo*(Dif*Sh*Sun + Amb*Ao);
+	C += Spec*Sh*pow(max(dot(reflect(RD, N), L), 0.0), SpecPow)*Sun*0.5;
+	return C;
+}
