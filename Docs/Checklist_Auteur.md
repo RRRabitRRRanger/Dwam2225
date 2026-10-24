@@ -25,7 +25,7 @@
 
 Classées par utilité pour P1. Quand J0 sera fait, Claude en reprendra la plupart lui-même ; restera seulement ce qui demande ton œil.
 
-- [ ] **C1. CharacterKit M1** : pièces qui suivent le mannequin ([[Guide_CharacterKit]]). → reprise par Claude à J0.
+- [x] **C1. CharacterKit M1** → vérifié par Claude (tests automatiques + captures, 2026-10-25).
 - [ ] **C5. SDFEyes U2** : matériau de test ([[Guide_SDFEyes]]). → remplacé par M3 (component + asset de forme), plus de câblage à la main.
 - [x] Post-process, diffus physique, transfert de normales, PatchTerrain, GPUTrace (GPU), LayoutKit, GraphKit : **vus par l'auteur** (2026-10-25).
 

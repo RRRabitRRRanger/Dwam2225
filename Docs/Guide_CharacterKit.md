@@ -2,7 +2,7 @@
 
 > Accueil : [[00 - Accueil]] · Plan : [[Plan_Mannequin]]
 
-> État (2026-10-21) : plugin `Plugins/CharacterKit/` **compilé** (`UnrealEditor-CharacterKit.dll`). **Rien n'est encore vu dans l'éditeur.** But : des pièces (formes du moteur) qui suivent le mannequin pendant qu'il s'anime.
+> État (2026-10-25) : **✔ vérifié par Claude** avec les tests automatiques (`Tools/RunTests.ps1 CharacterKit`, 3 tests réussis) : les pièces restent sur leurs os pendant 3 s de marche (écart 0,0000 cm), swap, copie de description, os inconnu ignoré ; captures dans `Saved/Automation/CharacterKit/`. Le montage à la main ci-dessous reste valable pour essayer soi-même.
 
 ## Ce que contient le plugin
 
@@ -34,7 +34,7 @@ Menu **Edit → Plugins**, chercher **Character Kit** : coché (activé par déf
 | `Thigh_L` | `thigh_l` | `Cylinder` | (-22, 0, 0) / (0, 90, 0) / (0.14, 0.14, 0.42) |
 | `Calf_L` | `calf_l` | `Cylinder` | (-20, 0, 0) / (0, 90, 0) / (0.11, 0.11, 0.4) |
 
-Ces valeurs sont **un point de départ** : le repère des os du mannequin n'est pas le même partout (bras et jambes ont leur axe X le long de l'os, mais dans des sens différents). Si une pièce part de travers, on corrige son **Offset** (voir § 4). Les formes du moteur font 100 unités : une échelle de 0.3 donne 30 cm.
+Ces valeurs sont **un point de départ**. Repère des os **mesuré par le test automatique** (2026-10-25) : l'axe X suit l'os partout ; vers l'enfant en **+X** pour la colonne et les bras (`upperarm_l` → `lowerarm_l` à +27,8 cm), en **−X** pour les jambes (`thigh_l` → `calf_l` à −43,4 cm, `calf_l` → `foot_l` à −42,3 cm). Si une pièce part de travers, on corrige son **Offset** (voir § 4). Les formes du moteur font 100 unités : une échelle de 0.3 donne 30 cm.
 
 ## 3. L'acteur de test
 

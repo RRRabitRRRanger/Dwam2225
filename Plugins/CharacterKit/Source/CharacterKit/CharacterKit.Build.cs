@@ -12,5 +12,12 @@ public class CharacterKit : ModuleRules
 			"CoreUObject",
 			"Engine"
 		});
+
+		// Pour les tests fonctionnels (captures)
+		PrivateDependencyModuleNames.AddRange(new string[]
+		{
+			"ImageCore",
+			"RenderCore"
+		});
 	}
 }

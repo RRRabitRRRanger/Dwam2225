@@ -141,6 +141,8 @@ flowchart TD
 
 ## 5. La vérification autonome (J0, préalable)
 
+**État (2026-10-25) : ✔ en place.** `Tools/RunTests.ps1 <Filtre>` ouvre l'éditeur **avec sa fenêtre** (décision de l'auteur), lance les tests, enregistre le rapport (`Saved/Automation/Reports/index.json`) et se ferme ; il refuse de démarrer si un éditeur est déjà ouvert. Premier usage : `CharacterKit` (3 tests fonctionnels dans un monde créé en mémoire, captures PNG par Scene Capture). Pièges notés : un monde créé en mémoire ne fait pas jouer l'animation au tick, les tests posent le mannequin explicitement ; le mannequin regarde vers +Y.
+
 L'auteur le fait déjà au travail : des tests automatiques Unreal, avec des prévisualisations.
 
 - **Tests unitaires** (déjà en place dans 6 plugins) : logique pure, sans monde.
