@@ -15,7 +15,7 @@ Retour à [[00 - Accueil]] · Références réelles citées : [[References_Prece
 
 ## 1. Les idées de l'auteur qu'on reconnaît (à confirmer)
 
-Reconstituées à partir de ce que Gemini reformule ou cite (« ton idée… », « ce que tu viens de lâcher… »). **À confirmer par l'auteur** avant de les verser dans les plans.
+Reconstituées à partir de ce que Gemini reformule ou cite (« ton idée… », « ce que tu viens de lâcher… »). **Confirmées par l'auteur le 2026-10-25** : « c'est bien des trucs que j'ai mis en avant, et c'est surtout comme ça que Gemini en a retenu ». Versées dans [[Plan_EireneNexus]].
 
 | Idée (formulée par Claude) | Indice dans le dump | Déjà dans le coffre ? |
 |---|---|---|
@@ -80,15 +80,21 @@ Reconstituées à partir de ce que Gemini reformule ou cite (« ton idée… »,
 
 **Lecture de Claude.** C'est le modèle d'[[Plan_EireneNexus]] (profils de valeurs, proximité = valeurs **et** géographie, regroupement hiérarchique, sécession avec hystérésis) **plus** trois ajouts nets de l'auteur : l'ancre relationnelle, la morale séparée de l'étiquette, la scission déclenchée par le monopole.
 
-## 3. Ce qui contredit le coffre (le coffre fait foi)
+## 3. Écarts avec le coffre
 
-1. **« Ton Nemesis-like », vendettas, contrats d'assassinat, titre gagné en tuant le joueur.** Le coffre a tranché (2026-10-12, [[Plan_FactionAI]]) : **rien du Nemesis system, pas de mécanique de vengeance dédiée** ; des élites suivis, des entités à mémoire, des rumeurs. Les rivalités peuvent exister (désir mimétique, théorie des jeux) sans système de vengeance contre le joueur.
-2. **« La faction fait apparaître des renforts » pour revenir à l'équilibre.** Contraire au principe n° 5 (**rien ne se crée**) et à [[Plan_VitalPotential]] (somme nulle par acte). La force de rappel du thermostat doit être un **flux** entre réservoirs existants (la faction dépense son potentiel, puise dans la nature, ponctionne un autre acte), pas une création. Bonne nouvelle : un thermostat à somme nulle reste possible, c'est même plus intéressant (le rappel coûte quelque chose à quelqu'un).
-3. **Un dictionnaire de faits unique pour tout le monde.** Il rend le monde omniscient : tous les PNJ « savent » que le roi gobelin est mort. Or [[Plan_EireneNexus]] veut de l'**information incomplète** (croyances parfois fausses, rumeurs, espions) et des entités à **mémoire**. Il faut des faits **du monde** (la vérité) et des faits **connus par chaque entité** (ce qu'elle croit), propagés par les rumeurs. Le système de Ruskin interroge d'ailleurs plusieurs sources de faits (le locuteur, le monde, l'événement).
-4. **« Si le joueur meurt » / « s'il te tue ».** Principe n° 6 : **on ne meurt pas**, la défaite est un événement de mort imminente. Compatible avec la règle 6 du potentiel vital (l'ennemi gagne une vie), à condition de passer par ces événements.
-5. **« Tu as déjà ton plugin de graphe et ton Eiréné Nexus. »** GraphKit existe (v0), Eiréné Nexus **n'est pas codé** (💭 idée).
-6. **Mettre toute la simulation dans le nœud du graphe** (`FSystemicGraphNode` avec canaux, verrou, curseur). [[Plan_Graph]] a décidé d'un **socle minimal** : nœuds, arêtes, distance, tags, **charge utile libre**. Chaque système met **sa** charge utile et **ses** règles, dans son propre plugin, sans toucher au socle.
-7. **Le feu sur la carte des zones.** [[Plan_Fire]] (idée de l'auteur) construit le graphe **seulement autour du feu**, à l'échelle des plaques d'herbe et des objets. La parenté mathématique (flux, seuil, épuisement) est juste ; le même graphe pour le feu et la guerre, non : ce sont deux échelles.
+> **Corrigé le 2026-10-25 après relecture par l'auteur.** La première version présentait sept « contradictions ». Relues phrase à phrase dans le dump, la plupart n'en sont pas : soit Claude prêtait à Gemini une conséquence qu'il n'écrit pas, soit le dump est compatible avec le coffre. Un seul écart réel reste (n° 1, et encore partiel). Le tableau cite le texte du dump pour chaque point.
+
+| # | Ce que Claude avait écrit | Ce que dit le dump | Verdict après relecture |
+|---|---|---|---|
+| 1 | « Nemesis-like », vengeance contre le joueur : contraire au coffre | « ton Nemesis-like » ; « Son Rival… génère une mission d'assassinat contre toi » | **L'analogie est légitime** : l'auteur présente Eiréné Nexus en le comparant au Nemesis system et en disant que ce n'en est pas un ; le nom a été choisi d'abord pour s'y opposer ([[Plan_EireneNexus]]). Gemini reprend cette présentation. **Seul point à surveiller** : un rival qui lance une mission d'assassinat contre le joueur se rapproche de « se venger du joueur », écarté le 2026-10-12 ([[Plan_FactionAI]]). Si ça naît des intérêts d'une faction (et pas d'une mécanique de vengeance), ça reste dans l'esprit. |
+| 2 | ~~Les renforts du thermostat violent « rien ne se crée »~~ | « fait spawner des renforts d'élite **depuis sa capitale** » | **Pas une contradiction.** Le sujet est le **choix** de revenir ou non vers l'équilibre écrit (rester proche de l'authoring, ou laisser vraiment tourner le système). Des renforts qui partent de la capitale sont un déplacement, pas une création. Le principe n° 5 dit seulement que le rappel, quel qu'il soit, se paie dans les réservoirs existants. |
+| 3 | ~~Un dictionnaire unique rend les PNJ omniscients~~ | « Toute la mémoire narrative… tient dans UNE SEULE map plate » | La map unique est bien dans le dump ; **l'omniscience, Gemini ne l'écrit nulle part** : c'est une conséquence tirée par Claude. Reste une **remarque de conception** (pas une contradiction) pour `Plan_Dialogue` : avec des rumeurs et des croyances ([[Plan_EireneNexus]]), il faudra savoir *qui* connaît un fait. Gemini en a lui-même l'amorce (`Knows_Orik_Is_Traitor`). |
+| 4 | ~~La mort du joueur contredit « on ne meurt pas »~~ | Une seule occurrence : « et s'il te tue, il gagne le titre… » (cas 4) | **Pas une contradiction** : chez nous, « te tuer » déclenche un événement de mort imminente, et l'ennemi gagne une vie (règle 6 de [[Plan_VitalPotential]]). Le titre gagné est compatible. |
+| 5 | Eiréné Nexus n'est pas codé | « tu as déjà la brique la plus dure (ton plugin de Graphe… et ton Eriene Nexus) » | Exact, mais **sans conséquence** : simple raccourci de Gemini. |
+| 6 | ~~La simulation dans le nœud contredit GraphKit minimal~~ | « ajouter une struct de métadonnées sur les Nœuds de ton plugin de Graphe : `FZoneSimulationPayload` » | **Compatible** : c'est exactement la **charge utile libre** prévue par [[Plan_Graph]]. La simulation reste dans son propre plugin, la donnée voyage dans la charge utile. |
+| 7 | ~~Le feu sur le graphe des zones~~ | « la même mathématique sur ton plugin de Graphe » ; « UN SEUL solveur » | Gemini parle surtout de **la même mathématique et du même solveur**, pas forcément du même graphe. Nuance seulement : [[Plan_Fire]] construit son graphe autour du feu, à l'échelle des plaques d'herbe ; un solveur commun peut tourner sur deux graphes d'échelles différentes. |
+
+**Sur les chiffres de Gemini** (auteur, 2026-10-25) : ce sont des ordres de grandeur ; les nombres sont faux, mais l'idée qu'ils défendent tient a priori (un graphe sans rendu se simule très vite, une sauvegarde de faits et de graines est petite).
 
 ## 4. Affirmations techniques : vérifiées ou à corriger
 
@@ -120,7 +126,7 @@ Reconstituées à partir de ce que Gemini reformule ou cite (« ton idée… »,
 
 ## 6. Questions à l'auteur
 
-1. Les idées du §1 sont-elles bien les tiennes, et bien formulées ? (Surtout le thermostat, les marginaux, la scission au monopole.)
-2. L'armure dorée sous la suie lavée par la pluie : on l'ajoute à la scène de la tranche verticale ?
-3. On commence par `Plan_Dialogue` (Ruskin) pour J5 ?
-4. Les traits des entités : des tags pondérés libres (ce que dit [[Plan_EireneNexus]]) ou quatre axes fixes (ce que propose Gemini) ?
+1. ~~Les idées du §1 sont-elles bien les tiennes ?~~ → **Oui** (2026-10-25).
+2. ~~L'armure dorée sous la suie lavée par la pluie dans la tranche verticale ?~~ → « C'était juste un exemple, mais ouep, pourquoi pas » : **candidate** pour [[Plan_VerticalSlice]], pas une décision.
+3. On commence par `Plan_Dialogue` (Ruskin) pour J5 ? → pas encore répondu.
+4. Tags pondérés libres ou axes fixes ? → l'auteur trouve l'idée de Gemini « pas bête » et veut **y réfléchir** : réflexion de Claude dans [[Plan_EireneNexus]] (« Traits : tags libres ou axes fixes ? »).
