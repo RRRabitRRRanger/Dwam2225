@@ -35,11 +35,20 @@ button { font: 600 13px var(--sans); border: 1px solid var(--line); background: 
 button:hover, button.on { border-color: var(--wood); }
 .legend { display: grid; grid-template-columns: 14px 1fr; gap: 4px 8px; font-size: 13px; align-items: center; }
 .sw { width: 12px; height: 12px; border-radius: 2px; }
+.sel { position: absolute; left: 12px; top: 10px; font: 600 13px var(--sans); color: #f1e6d6; background: rgba(0,0,0,.35); padding: 4px 8px; border-radius: 4px; pointer-events: none; }
+.sel:empty { display: none; }
+details summary { cursor: pointer; font-size: 13px; font-weight: 600; }
+.adv { display: grid; gap: 6px; margin-top: 8px; }
+.adv .line { display: grid; grid-template-columns: 74px 70px repeat(3, minmax(0, 1fr)); gap: 4px; align-items: center; font-size: 12px; }
+.adv .line.num { grid-template-columns: 74px repeat(4, minmax(0, 1fr)); }
+.adv input, .adv select { font: 12px var(--mono); color: var(--fg); background: transparent; border: 1px solid var(--line); border-radius: 3px; padding: 2px 3px; width: 100%; box-sizing: border-box; min-width: 0; }
+.adv .hdr { color: var(--muted); font-size: 11px; }
+textarea { width: 100%; box-sizing: border-box; font: 11px var(--mono); color: var(--fg); background: transparent; border: 1px solid var(--line); border-radius: 4px; }
 @media (max-width: 800px) { .app { grid-template-columns: 1fr; height: auto; } .view { height: 60vh; } }
 </style>
 
 <div class="app">
-  <div class="view"><canvas id="c" tabindex="0"></canvas><div class="hud" id="hud"></div><div class="err" id="err"></div></div>
+  <div class="view"><canvas id="c" tabindex="0"></canvas><div class="hud" id="hud"></div><div class="sel" id="selLabel"></div><div class="err" id="err"></div></div>
   <div class="panel">
     <section>
       <div class="row"><h1>Atelier anatomique</h1><select id="part"><option value="bras">Bras</option><option value="jambe">Jambe</option></select></div>
@@ -64,6 +73,7 @@ button:hover, button.on { border-color: var(--wood); }
         <label class="toggle"><input type="checkbox" id="ids"> Couleur par muscle</label>
         <label class="toggle"><input type="checkbox" id="bones"> Os seuls</label>
         <label class="toggle"><input type="checkbox" id="fill" checked> Gabarit sous les muscles</label>
+        <label class="toggle" id="clipBox" hidden><input type="checkbox" id="clip" checked> Rogner au bassin</label>
       </div>
       <div class="row"><label class="toggle" for="mode">Rendu</label><select id="mode"><option value="0">Peau unie</option><option value="1" selected>Peau colorée selon les tissus</option><option value="2">Écorché (tissus)</option></select></div>
     </section>
@@ -73,6 +83,16 @@ button:hover, button.on { border-color: var(--wood); }
       <div id="cutBox"></div>
       <p class="note">La tranche montre chaque muscle dans sa couleur, l'os, le gabarit, et en jaune la graisse et ce que la réunion douce ajoute entre les volumes.</p>
       <div class="legend" id="legend"></div>
+    </section>
+    <section>
+      <h2>Muscle choisi</h2>
+      <p class="note" id="selInfo">Clique sur un muscle dans la vue (sans glisser) pour savoir lequel c'est ; il se colore en orange.</p>
+      <details id="adv"><summary>Mode avancé : corriger ce muscle à la main</summary>
+        <div class="adv" id="advForm"></div>
+        <div class="row" style="margin-top:8px"><button id="advCopy">Copier le JSON du membre</button><button id="advReset">Annuler mes corrections</button></div>
+        <p class="note" id="advNote"></p>
+        <textarea id="advOut" rows="6" hidden></textarea>
+      </details>
     </section>
   </div>
 </div>
@@ -143,7 +163,8 @@ function shaderSource() {
   return `
 precision highp float;
 uniform vec2 uRes; uniform vec3 uEye, uTarget;
-uniform vec3 uMA[${NM}], uMV[${NM}], uMB[${NM}], uMC[${NM}], uMX[${NM}]; uniform vec4 uMR[${NM}];
+uniform vec3 uMA[${NM}], uMV[${NM}], uMB[${NM}], uMC[${NM}], uMX[${NM}]; uniform vec4 uMR[${NM}]; uniform vec2 uMQ[${NM}];
+uniform float uPick, uSel, uClip; uniform vec3 uClipP, uClipN;
 uniform vec3 uBA[${NB}], uBB[${NB}]; uniform float uBR[${NB}];
 ${NP ? `uniform vec3 uPA[${NP}], uPB[${NP}], uPU[${NP}], uPR[${NP}];` : ""}
 ${NF ? `uniform vec3 uFA[${NF}], uFB[${NF}]; uniform vec2 uFR[${NF}];` : ""}
@@ -156,9 +177,10 @@ const vec3 cBone = ${vec(COL.bone)}, cFill = ${vec(COL.fill)}, cFat = ${vec(COL.
 float smin(float a, float b, float k) { float h = clamp(.5 + .5 * (b - a) / k, 0., 1.); return mix(b, a, h) - k * h * (1. - h); }
 // Morceau de muscle : le segment a → b couvre [t0, t1] de la longueur ; rayon r0 (origine) → rb (ventre) → r1 (insertion)
 // en sinus, bouts arrondis (le segment est clampé). r = (r0, r1, rb, at). Renvoie (distance, g) : g = 1 au ventre, 0 aux bouts.
-vec2 musclePiece(vec3 p, vec3 a, vec3 b, float t0, float t1, vec4 r) {
+// tq = part de la longueur qui n'est que tendon, au début et à la fin : le ventre se loge entre les deux.
+vec2 musclePiece(vec3 p, vec3 a, vec3 b, float t0, float t1, vec4 r, vec2 tq) {
   vec3 ab = b - a; float s = clamp(dot(p - a, ab) / max(dot(ab, ab), 1e-4), 0., 1.);
-  float t = mix(t0, t1, s);
+  float t = clamp((mix(t0, t1, s) - tq.x) / max(1. - tq.x - tq.y, .05), 0., 1.);
   float g = t < r.w ? sin(1.5707963 * clamp(t / r.w, 0., 1.)) : sin(1.5707963 * clamp((1. - t) / (1. - r.w), 0., 1.));
   return vec2(length(p - a - ab * s) - (t < r.w ? mix(r.x, r.z, g) : mix(r.y, r.z, g)), g);
 }
@@ -166,15 +188,15 @@ vec2 musclePiece(vec3 p, vec3 a, vec3 b, float t0, float t1, vec4 r) {
 // Avec un point de passage : une courbe (Bézier quadratique qui passe par v à mi-parcours) découpée en quatre morceaux
 // courts, recollés par un simple min : les rayons se raccordent exactement aux jonctions. (Un fondu doux entre les
 // morceaux ajoutait un renflement à chaque jonction : des anneaux le long du muscle.)
-vec2 muscleG(vec3 p, vec3 a, vec3 v, vec3 b, vec4 r) {
-  if (length(v - a) < .01) { vec2 m = musclePiece(p, a, b, 0., 1., r); return vec2(m.x * .8, m.y); }
+vec2 muscleG(vec3 p, vec3 a, vec3 v, vec3 b, vec4 r, vec2 tq) {
+  if (length(v - a) < .01) { vec2 m = musclePiece(p, a, b, 0., 1., r, tq); return vec2(m.x * .8, m.y); }
   vec3 c = 2. * v - .5 * (a + b);
   vec3 q1 = .5625 * a + .375 * c + .0625 * b, q3 = .0625 * a + .375 * c + .5625 * b;
   float l1 = length(q1 - a), l2 = l1 + length(v - q1), l3 = l2 + length(q3 - v), L = l3 + length(b - q3);
-  vec2 m = musclePiece(p, a, q1, 0., l1 / L, r), n;
-  n = musclePiece(p, q1, v, l1 / L, l2 / L, r); m = n.x < m.x ? n : m;
-  n = musclePiece(p, v, q3, l2 / L, l3 / L, r); m = n.x < m.x ? n : m;
-  n = musclePiece(p, q3, b, l3 / L, 1., r); m = n.x < m.x ? n : m;
+  vec2 m = musclePiece(p, a, q1, 0., l1 / L, r, tq), n;
+  n = musclePiece(p, q1, v, l1 / L, l2 / L, r, tq); m = n.x < m.x ? n : m;
+  n = musclePiece(p, v, q3, l2 / L, l3 / L, r, tq); m = n.x < m.x ? n : m;
+  n = musclePiece(p, q3, b, l3 / L, 1., r, tq); m = n.x < m.x ? n : m;
   return vec2(m.x * .8, m.y);
 }
 float capsule(vec3 p, vec3 a, vec3 b, float r) { vec3 ab = b - a; float t = clamp(dot(p - a, ab) / max(dot(ab, ab), 1e-4), 0., 1.); return length(p - (a + ab * t)) - r; }
@@ -231,7 +253,7 @@ vec3 field(vec3 p) {
     ${NK ? `{ float e = massField(p); if (e < best) { best = e; id = -4.; } d = smin(d, e, max(kInter, 1.5)); }` : ""}
     float g = 1e3, gPrev = -1.;
     for (int i = 0; i < ${NM}; i++) {
-      float m = muscleG(p, uMA[i], uMV[i], uMB[i], uMR[i]).x; if (m < best) { best = m; id = float(i); }
+      float m = muscleG(p, uMA[i], uMV[i], uMB[i], uMR[i], uMQ[i]).x; if (m < best) { best = m; id = float(i); }
       if (uMX[i].x != gPrev) { d = smin(d, g, kInter); g = 1e3; gPrev = uMX[i].x; }
       g = smin(g, m, max(kInter, uMX[i].y));
     }
@@ -240,12 +262,13 @@ vec3 field(vec3 p) {
     if (db < 0.) { best = db; id = -2.; }   // dans la coupe, l'os passe devant le gabarit qui l'entoure
   }
   if (uCut > .5) d = max(d, dot(p - uCutP, uCutN));
+  if (uClip > .5) d = max(d, dot(p - uClipP, uClipN));
   return vec3(d, id, best);
 }
 // Ce qu'il y a sous la peau en p : (os affleurant, tendon, graisse, ventre de muscle), chacun entre 0 et 1.
 vec4 tissue(vec3 p) {
   float db = bonesField(p), best = 1e3, ten = 0.;
-  for (int i = 0; i < ${NM}; i++) { vec2 m = muscleG(p, uMA[i], uMV[i], uMB[i], uMR[i]); if (m.x < best) { best = m.x; ten = uMX[i].z > .5 ? 1. : 1. - m.y; } }
+  for (int i = 0; i < ${NM}; i++) { vec2 m = muscleG(p, uMA[i], uMV[i], uMB[i], uMR[i], uMQ[i]); if (m.x < best) { best = m.x; ten = uMX[i].z > .5 ? 1. : 1. - m.y; } }
   float bone = 1. - smoothstep(.6, 3.2, db), fat = smoothstep(.15, 1.2, best) * (1. - bone);
   ${NK ? `if (massField(p) < best) fat = 1. - bone;   // une masse de graisse affleure` : ""}
   return vec4(bone, ten * (1. - fat) * (1. - bone), fat, (1. - ten) * (1. - fat) * (1. - bone));
@@ -258,6 +281,7 @@ void main() {
   vec3 rd = normalize(f * 2.2 + uv.x * r + uv.y * u), p = uEye; float t = 0.; vec3 h = vec3(1e3, -1, 0);
   for (int i = 0; i < 200; i++) { h = field(p); if (h.x < .01 || t > 600.) break; t += h.x; p += rd * h.x; }
   vec3 bg = mix(vec3(.10, .095, .09), vec3(.17, .16, .15), uv.y * .5 + .5);
+  if (uPick > .5) { gl_FragColor = h.x > .05 ? vec4(0.) : vec4((h.y + 5.) / 255., 0., 0., 1.); return; }
   if (h.x > .05) { gl_FragColor = vec4(pow(bg, vec3(.4545)), 1); return; }
   vec3 n = normal(p), L = normalize(vec3(.5, .7, .6));
   bool onCut = uCut > .5 && abs(dot(p - uCutP, uCutN)) < .05;
@@ -280,6 +304,7 @@ void main() {
       rough = T.x * .7 + T.y * .38 + T.z * .45 + T.w * .2;
     }
   }
+  if (!onCut && uSel > -.5 && abs(h.y - uSel) < .5) alb = mix(alb, vec3(1., .55, .2), .45);   // muscle choisi
   float ndl = dot(n, L), dif = onCut ? .9 : clamp(ndl * .8 + .2, 0., 1.);
   float rim = onCut ? 0. : pow(1. - clamp(dot(n, -rd), 0., 1.), 3.) * .22;
   float ao = clamp(field(p + n * .8).x / .8, 0., 1.);
@@ -345,15 +370,19 @@ function render() {
   gl.uniform2f(U("uRes"), cv.width, cv.height);
   gl.uniform3f(U("uEye"), target[0] + dist * Math.cos(pitch) * Math.sin(yaw), target[1] + dist * Math.sin(pitch), target[2] + dist * Math.cos(pitch) * Math.cos(yaw));
   gl.uniform3fv(U("uTarget"), target);
-  const A = [], V = [], B = [], R = [], C = [], X = [];
+  const A = [], V = [], B = [], R = [], C = [], X = [], Q = [];
   D.muscles.forEach(m => {
     const pts = musclePoints(m), swell = Math.sqrt(m.L0 / Math.max(pathLength(pts), 1));   // volume conservé
     const effort = m.tendon ? 1 : 1 + .18 * P.effort;   // contraction active : le ventre gonfle, pas le tendon
     A.push(...pts[0]); V.push(...pts[1]); B.push(...pts[2]);
     R.push(m.r0 * P.mass, m.r1 * P.mass, m.rb * P.mass * swell * effort, m.at - (m.peak ? .08 * P.effort : 0));
-    C.push(...hex(m.c)); X.push(m.gi, m.k || .8, m.tendon ? 1 : 0);
+    C.push(...hex(m.c)); X.push(m.gi, m.k || .8, m.tendon ? 1 : 0); Q.push(...(m.tail || [0, 0]));
   });
-  gl.uniform3fv(U("uMA"), A); gl.uniform3fv(U("uMV"), V); gl.uniform3fv(U("uMB"), B); gl.uniform4fv(U("uMR"), R); gl.uniform3fv(U("uMC"), C); gl.uniform3fv(U("uMX"), X);
+  gl.uniform3fv(U("uMA"), A); gl.uniform3fv(U("uMV"), V); gl.uniform3fv(U("uMB"), B); gl.uniform4fv(U("uMR"), R); gl.uniform3fv(U("uMC"), C); gl.uniform3fv(U("uMX"), X); gl.uniform2fv(U("uMQ"), Q);
+  gl.uniform1f(U("uPick"), picking ? 1 : 0); gl.uniform1f(U("uSel"), SEL);
+  const clipOn = !!D.clipTop && document.getElementById("clip").checked;
+  gl.uniform1f(U("uClip"), clipOn ? 1 : 0);
+  if (D.clipTop) { gl.uniform3fv(U("uClipP"), point(D.clipTop.p)); gl.uniform3fv(U("uClipN"), norm(rotV(F[D.clipTop.p[0]], D.clipTop.n))); }
   gl.uniform3fv(U("uBA"), D.skeleton.flatMap(b => point(b.a))); gl.uniform3fv(U("uBB"), D.skeleton.flatMap(b => point(b.b))); gl.uniform1fv(U("uBR"), D.skeleton.map(b => b.r));
   if (D.plates.length) {
     gl.uniform3fv(U("uPA"), D.plates.flatMap(q => point(q.a))); gl.uniform3fv(U("uPB"), D.plates.flatMap(q => point(q.b)));
@@ -393,10 +422,93 @@ function sliders(box, list) {
 function sync() { Object.keys(P).forEach(k => { const r = document.getElementById(k); if (r) { r.value = P[k]; document.getElementById(k + "N").value = P[k]; } }); }
 function set(k, v, interactive) { if (!isFinite(v)) return; P[k] = v; sync(); if (k === "cut" && view === "coupe") setView("coupe"); else draw(interactive); }
 
+// ---------- clic sur un muscle, mode avancé ----------
+let picking = false, SEL = -99, PART = "bras", downAt = null;
+cv.addEventListener("pointerdown", e => { downAt = [e.clientX, e.clientY]; });
+cv.addEventListener("pointerup", e => {
+  if (!downAt || Math.hypot(e.clientX - downAt[0], e.clientY - downAt[1]) > 4) return;
+  const rect = cv.getBoundingClientRect(), px = new Uint8Array(4);
+  busy = false; picking = true; render();
+  const k = cv.width / rect.width;
+  gl.readPixels(Math.floor((e.clientX - rect.left) * k), Math.floor(cv.height - (e.clientY - rect.top) * k), 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, px);
+  picking = false;
+  select(px[3] ? px[0] - 5 : -99);
+});
+const NAMES = { "-2": "Os", "-3": "Gabarit (tissu sous les muscles)", "-4": "Masse de graisse" };
+const specText = s => s ? `${s[0]} ${s.slice(1).join(" / ")}` : "aucun";
+function select(id) {
+  SEL = id >= 0 ? id : -99;
+  const m = D.muscles[id];
+  const label = m ? m.name : NAMES[id] || "";
+  document.getElementById("selLabel").textContent = label;
+  document.getElementById("selInfo").textContent = m
+    ? `${m.name} — groupe « ${m.g} ». Origine ${specText(m.o)}, passage ${specText(m.v)}, insertion ${specText(m.i)}.`
+    : label ? label + "." : "Clique sur un muscle dans la vue (sans glisser) pour savoir lequel c'est ; il se colore en orange.";
+  buildForm(); draw();
+}
+// Formulaire du muscle choisi : attaches (repère + 3 nombres), rayons, ventre, tendons, réunion de groupe
+function buildForm() {
+  const box = document.getElementById("advForm"), m = D.muscles[SEL];
+  if (!m) { box.innerHTML = '<p class="note">Choisis d\'abord un muscle dans la vue.</p>'; return; }
+  const opts = (cur, none) => (none ? `<option value="">aucun</option>` : "") + D.bones.map(b => `<option value="${b.id}"${cur === b.id ? " selected" : ""}>${b.id}</option>`).join("");
+  const att = (key, label, none) => {
+    const s = m[key], raw = s && BONE[s[0]].raw, h = raw ? ["x", "y (haut)", "z (avant)"] : ["t (le long)", "x (ext.)", "z (avant)"];
+    return `<div class="line hdr"><span></span><span>repère</span>${h.map(x => `<span>${x}</span>`).join("")}</div>
+      <div class="line"><span>${label}</span><select data-k="${key}" data-j="0">${opts(s && s[0], none)}</select>${[1, 2, 3].map(j => `<input type="number" step="0.05" data-k="${key}" data-j="${j}" value="${s ? s[j] : ""}"${s ? "" : " disabled"}>`).join("")}</div>`;
+  };
+  const num = (label, keys) => `<div class="line num"><span>${label}</span>${keys.map(([k, j, v, t]) => `<input type="number" step="0.05" title="${t}" placeholder="${t}" data-n="${k}" data-j="${j}" value="${v}">`).join("")}</div>`;
+  box.innerHTML = att("o", "Origine") + att("v", "Passage", true) + att("i", "Insertion") +
+    `<div class="line num hdr"><span></span><span>r origine</span><span>r ventre</span><span>r insertion</span><span>ventre à</span></div>` +
+    num("Rayons (cm)", [["r0", -1, m.r0, "r origine"], ["rb", -1, m.rb, "r ventre"], ["r1", -1, m.r1, "r insertion"], ["at", -1, m.at, "ventre à (0 à 1)"]]) +
+    `<div class="line num hdr"><span></span><span>tendon début</span><span>tendon fin</span><span>réunion k</span><span></span></div>` +
+    num("Tendons", [["tail", 0, (m.tail || [0, 0])[0], "part tendon au début"], ["tail", 1, (m.tail || [0, 0])[1], "part tendon à la fin"], ["k", -1, m.k || .8, "réunion dans le groupe (cm)"]]);
+  box.querySelectorAll("select").forEach(el => el.addEventListener("change", () => {
+    const k = el.dataset.k;
+    if (!el.value) delete m[k];
+    else if (m[k]) m[k][0] = el.value;
+    else m[k] = [el.value, ...(BONE[el.value].raw ? [0, 0, 0] : [.5, 0, 0])];
+    edited(); buildForm();
+  }));
+  box.querySelectorAll("input[data-k]").forEach(el => el.addEventListener("input", () => { const v = +el.value; if (isFinite(v) && m[el.dataset.k]) { m[el.dataset.k][+el.dataset.j] = v; edited(); } }));
+  box.querySelectorAll("input[data-n]").forEach(el => el.addEventListener("input", () => {
+    const v = +el.value, k = el.dataset.n, j = +el.dataset.j; if (!isFinite(v)) return;
+    if (j >= 0) { m[k] = m[k] || [0, 0]; m[k][j] = v; } else m[k] = v;
+    edited();
+  }));
+}
+// Les longueurs de repos (gonflement à volume conservé) se recalculent dans la pose par défaut du membre
+function restLengths() {
+  const save = { ...P }; D.pose.forEach(q => P[q.id] = q.value); frames();
+  D.muscles.forEach(m => m.L0 = pathLength(musclePoints(m)));
+  Object.assign(P, save); frames();
+}
+const clean = () => JSON.parse(JSON.stringify(D, (k, v) => (k === "L0" || k === "gi") ? undefined : v));
+function edited() {
+  restLengths();
+  try { localStorage.setItem("atelier-edits-" + PART, JSON.stringify(clean().muscles)); } catch (e) {}
+  document.getElementById("advNote").textContent = "Corrections gardées dans ce navigateur. « Copier le JSON du membre » pour me les donner.";
+  draw(true);
+}
+document.getElementById("advCopy").addEventListener("click", () => {
+  const out = document.getElementById("advOut"), txt = JSON.stringify(clean(), null, 1);
+  out.hidden = false; out.value = txt; out.select();
+  try { navigator.clipboard.writeText(txt).then(() => document.getElementById("advNote").textContent = "JSON copié : colle-le moi dans la conversation.", () => {}); } catch (e) {}
+});
+document.getElementById("advReset").addEventListener("click", () => {
+  try { localStorage.removeItem("atelier-edits-" + PART); } catch (e) {}
+  document.getElementById("advNote").textContent = ""; document.getElementById("advOut").hidden = true; load(PART);
+});
+document.getElementById("clip").addEventListener("change", () => draw());
+
 async function load(part) {
+  PART = part; SEL = -99;
   const err = document.getElementById("err"); err.textContent = "";
   try {
     D = await (await fetch(PARTS[part], { cache: "no-store" })).json();   // toujours la dernière version du membre
+    let local = null; try { local = JSON.parse(localStorage.getItem("atelier-edits-" + part)); } catch (e) {}
+    if (local) D.muscles = local;   // corrections faites à la main dans le mode avancé
+    document.getElementById("advNote").textContent = local ? "Des corrections locales sont actives pour ce membre." : "";
+    document.getElementById("clipBox").hidden = !D.clipTop;
     D.plates = D.plates || []; D.fill = D.fill || []; D.fat.thin = D.fat.thin || []; D.masses = D.masses || [];
     BONE = Object.fromEntries(D.bones.map(b => [b.id, b]));
     // Groupes : les muscles d'un même groupe doivent se suivre (réunion à deux niveaux) ; tri stable par premier groupe vu
@@ -413,12 +525,12 @@ async function load(part) {
     const box = document.getElementById("posePresets");
     box.innerHTML = presets.map((q, i) => `<button data-pose="${i}">${q.name}</button>`).join("");
     box.querySelectorAll("[data-pose]").forEach(b => b.addEventListener("click", () => { Object.assign(P, presets[+b.dataset.pose].values); sync(); draw(); }));
-    frames(); D.muscles.forEach(m => m.L0 = pathLength(musclePoints(m)));
+    restLengths();
     document.getElementById("desc").textContent = D.description;
     document.getElementById("poseNote").textContent = (D.poseNote ? D.poseNote + " " : "") + "Un muscle qui raccourcit gonfle (volume conservé) ; l'effort les gonfle tous un peu plus et creuse les sillons entre groupes.";
     document.getElementById("legend").innerHTML = [...D.muscles.map(m => [m.c, m.name]), [COL.bone, "Os"], [COL.fill, "Gabarit"], [COL.fat, "Graisse, masses de graisse, réunion douce (coupe)"]]
       .map(([c, n]) => `<span class="sw" style="background:${c}"></span><span>${n}</span>`).join("");
-    compile(); sync(); setView("ava");
+    compile(); sync(); select(-99); setView("ava");
   } catch (e) { err.textContent = "Impossible de charger « " + part + " » : " + e.message; }
 }
 document.querySelectorAll("[data-p]").forEach(b => b.addEventListener("click", () => { const [d, f, m] = b.dataset.p.split(",").map(Number); P.def = d; P.fat = f; P.mass = m; sync(); draw(); }));
