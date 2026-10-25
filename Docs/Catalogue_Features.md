@@ -129,7 +129,8 @@ Ce que Claude ajoute :
 | Impact frames | [[Plan_PostProcess]] | 0 | Doc 16/10 |
 | Paupières dessinées sans mesh (et leur ombre) | [[Plan_Eyes]] | 1 | Le vrai sujet, pas le globe (auteur, 17/10) |
 | Focus : guider le regard | [[Plan_Focus]] | 1 | |
-| Transfert de normales | [[Plan_NormalTransfer]] | 4 | |
+| Transfert de normales | [[Plan_NormalTransfer]] | 4 | Testé sur le mannequin le 25/10 : la sonde doit suivre la taille du personnage |
+| Outil de réglage de la sonde du transfert de normales (auto + debug viewport, comme l'outil lightmap de l'auteur) | [[Plan_Mannequin]] | 0 | Idée du 25/10 |
 | Traces GPU | [[Plan_GpuTraces]] | 4 | |
 
 ### Outils
