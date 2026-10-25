@@ -628,6 +628,7 @@ bool FCharacterKitJointBlendTest::RunTest(const FString& Parameters)
 	};
 	Shoot(1.f, 10.f, TEXT("Baked_S1"));
 	Shoot(2.5f, 10.f, TEXT("Baked_S25"));
+	Shoot(2.5f, 25.f, TEXT("Baked_S25_D25")); // sonde à l'échelle du corps
 	IFileManager::Get().Delete(*(FPaths::ProjectSavedDir() / TEXT("Automation/CharacterKit/_warmup.png")));
 	return true;
 }
