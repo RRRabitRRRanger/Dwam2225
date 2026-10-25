@@ -55,7 +55,8 @@ button:hover, button.on { border-color: var(--wood); }
       <div class="slider"><label for="flex">Flexion du coude (°)</label><input type="number" id="flexN" step="1"><input type="range" id="flex" min="0" max="140" step="1"></div>
       <div class="slider"><label for="pron">Pronation, 0 = paume en avant (°)</label><input type="number" id="pronN" step="1"><input type="range" id="pron" min="0" max="160" step="1"></div>
       <div class="slider"><label for="lift">Élévation du bras (°)</label><input type="number" id="liftN" step="1"><input type="range" id="lift" min="0" max="90" step="1"></div>
-      <p class="note">En pronation, le radius croise le cubitus : les muscles attachés au radius (biceps, brachio-radial, rond pronateur, extenseurs) s'enroulent autour de l'avant-bras. Un muscle qui raccourcit gonfle.</p>
+      <div class="slider"><label for="effort">Effort, contraction active (0 à 1)</label><input type="number" id="effortN" step="0.05"><input type="range" id="effort" min="0" max="1" step="0.05"></div>
+      <p class="note">En pronation, le radius croise le cubitus : les muscles attachés au radius (biceps, brachio-radial, rond pronateur, extenseurs) s'enroulent autour de l'avant-bras. Un muscle qui raccourcit gonfle (volume conservé) ; l'effort les gonfle tous un peu plus et creuse les sillons entre groupes.</p>
     </section>
     <section>
       <h2>Vue</h2>
@@ -81,31 +82,33 @@ button:hover, button.on { border-color: var(--wood); }
 // ---------- repère en cm : x = extérieur (côté pouce en supination), y = haut, z = avant ; épaule à l'origine ----------
 // Attaches : S (omoplate / clavicule, fixe), H (humérus : t le long, x, z), U (cubitus), R (radius : tourne en pronation).
 const HUMERUS = 30, FOREARM = 26;
-// Muscle (volumes ronds de la v1) : origine o, point de passage v (facultatif), insertion i,
-// rayon aux bouts rt et au ventre rb (cm), position du ventre at (le long de la ligne), couleur.
+// Muscle (volumes ronds de la v1) : groupe g (réunion plus douce entre muscles d'un même groupe, au moins k cm),
+// origine o, point de passage v (facultatif), insertion i, rayon à l'origine r0, à l'insertion r1, au ventre rb (cm),
+// position du ventre at (le long de la ligne), couleur. peak : le pic de volume monte avec l'effort ; tendon : ne gonfle pas.
 const MUSCLES = [
-  // Deltoïdes de la v1 (préférés par l'auteur) : origines basses, sous l'acromion, qui ne dépassent pas
-  { name: "Deltoïde antérieur",  o: ["S", 0.5, 0.6, 3.2],   i: ["H", .45, 2.2, 1.0],   rt: 1.2, rb: 2.6, at: .3, c: "#d9744f" },
-  { name: "Deltoïde moyen",      o: ["S", 3.2, 0.9, 0],     i: ["H", .45, 2.6, 0],     rt: 1.2, rb: 2.8, at: .3, c: "#e8925f" },
-  { name: "Deltoïde postérieur", o: ["S", 0.5, 0.6, -3.2],  i: ["H", .45, 2.2, -1.0],  rt: 1.2, rb: 2.5, at: .3, c: "#c2604a" },
-  { name: "Coraco-brachial",     o: ["S", -1.2, -1.2, 2.6], i: ["H", .50, -1.4, .5],   rt: .5, rb: 1.1, at: .45, c: "#a86a8a" },
-  { name: "Biceps",              o: ["S", 0.4, -1.2, 2.4],  i: ["R", .12, .2, 1.0],    rt: .5, rb: 2.7, at: .55, c: "#d65a5a" },
-  { name: "Brachial",            o: ["H", .48, .2, 1.2],    i: ["U", .07, -.1, .9],    rt: .7, rb: 2.2, at: .6, c: "#b84c4c" },
+  // Deltoïde : trois faisceaux d'un même groupe (une coiffe en haut, le V en bas), origine fine mais ronde sous l'acromion
+  { name: "Deltoïde antérieur",  g: 0, k: 1.2, o: ["S", 0.5, 0.6, 3.2],   i: ["H", .45, 2.2, 1.0],   r0: .55, r1: .9, rb: 2.6, at: .3, c: "#d9744f" },
+  { name: "Deltoïde moyen",      g: 0, k: 1.2, o: ["S", 3.2, 0.9, 0],     i: ["H", .45, 2.6, 0],     r0: .55, r1: .9, rb: 2.8, at: .3, c: "#e8925f" },
+  { name: "Deltoïde postérieur", g: 0, k: 1.2, o: ["S", 0.5, 0.6, -3.2],  i: ["H", .45, 2.2, -1.0],  r0: .55, r1: .9, rb: 2.5, at: .3, c: "#c2604a" },
+  { name: "Coraco-brachial",     g: 1, o: ["S", -1.2, -1.2, 2.6], i: ["H", .50, -1.4, .5],   r0: .5, r1: .5, rb: 1.1, at: .45, c: "#a86a8a" },
+  { name: "Biceps",              g: 2, peak: true, o: ["S", 0.4, -1.2, 2.4], i: ["R", .12, .2, 1.0], r0: .5, r1: .5, rb: 2.7, at: .55, c: "#d65a5a" },
+  { name: "Brachial",            g: 3, peak: true, o: ["H", .48, .2, 1.2], i: ["U", .07, -.1, .9], r0: .7, r1: .7, rb: 2.2, at: .6, c: "#b84c4c" },
   // Triceps en fer à cheval : les chefs long (médial) et latéral finissent sur les bords du tendon, pas tous au même point
-  { name: "Triceps long",        o: ["S", -0.8, -2.2, -2.4],i: ["H", .74, -1.8, -1.9], rt: .6, rb: 2.6, at: .42, c: "#7a8fc9" },
-  { name: "Triceps latéral",     o: ["H", .18, 1.6, -1.3],  i: ["H", .74, 1.8, -1.9],  rt: .6, rb: 2.3, at: .42, c: "#93a6dc" },
-  { name: "Triceps médial",      o: ["H", .50, -1.8, -1.2], i: ["U", -.03, -.6, -1.7], rt: .6, rb: 1.7, at: .55, c: "#6474a8" },
+  { name: "Triceps long",        g: 4, o: ["S", -0.8, -2.2, -2.4],i: ["H", .74, -1.8, -1.9], r0: .6, r1: .6, rb: 2.6, at: .42, c: "#7a8fc9" },
+  { name: "Triceps latéral",     g: 4, o: ["H", .18, 1.6, -1.3],  i: ["H", .74, 1.8, -1.9],  r0: .6, r1: .6, rb: 2.3, at: .42, c: "#93a6dc" },
+  { name: "Triceps médial",      g: 4, o: ["H", .50, -1.8, -1.2], i: ["U", -.03, -.6, -1.7], r0: .6, r1: .6, rb: 1.7, at: .55, c: "#6474a8" },
   // Tendon commun : épais et arrondi (les bords vifs ne se fondent pas), un peu plus bas que les chefs qui l'entourent
-  { name: "Tendon du triceps",   o: ["H", .45, 0, -1.7],    i: ["U", -.04, 0, -1.6],   rt: .8, rb: 1.8, at: .3, c: "#ece6da" },
-  { name: "Anconé",              o: ["H", .98, 2.2, -.8],   i: ["U", .18, .6, -1.2],   rt: .7, rb: 1.2, at: .45, c: "#5a6aa0" },
-  // Muscles de l'avant-bras partis de l'humérus : longs fuseaux (v1), point de passage pour contourner le coude
-  { name: "Brachio-radial",      o: ["H", .68, 2.5, .4],    v: ["U", .12, 2.6, .7],   i: ["R", .94, 1.5, .2],   rt: .5, rb: 2.2, at: .38, c: "#e2b04f" },
-  { name: "Long ext. radial",    o: ["H", .82, 2.6, -.1],   v: ["U", .12, 2.4, -.3],  i: ["R", .95, 1.1, -.7],  rt: .5, rb: 1.6, at: .35, c: "#d4a04a" },
-  { name: "Extenseurs des doigts",o: ["H", .98, 2.0, -.6],  v: ["U", .12, 1.8, -1.1], i: ["R", .95, .2, -1.0],  rt: .5, rb: 2.0, at: .33, c: "#c9a24a" },
-  { name: "Ext. ulnaire du carpe",o: ["H", .98, 1.9, -.8],  v: ["U", .12, .8, -1.5],  i: ["U", .95, -1.1, -.7], rt: .45, rb: 1.3, at: .35, c: "#b08a3a" },
-  { name: "Fléchisseurs",        o: ["H", .98, -2.4, -.2],  v: ["U", .12, -2.2, .7],  i: ["R", .95, .2, .9],    rt: .6, rb: 2.4, at: .33, c: "#8fbf6a" },
-  { name: "Fléch. ulnaire du carpe",o: ["H", .98, -2.5, -.7],v: ["U", .12, -2.3, -.6],i: ["U", .95, -1.2, .3], rt: .5, rb: 1.5, at: .35, c: "#76a85a" },
-  { name: "Rond pronateur",      o: ["H", .96, -2.3, .2],   i: ["R", .5, 1.3, .3],     rt: .5, rb: 1.4, at: .4, c: "#5f9a55" },
+  { name: "Tendon du triceps",   g: 4, tendon: true, o: ["H", .45, 0, -1.7], i: ["U", -.04, 0, -1.6], r0: .8, r1: .8, rb: 1.8, at: .3, c: "#ece6da" },
+  { name: "Anconé",              g: 5, o: ["H", .98, 2.1, -.8],   i: ["U", .18, .6, -1.2],   r0: .7, r1: .7, rb: 1.2, at: .45, c: "#5a6aa0" },
+  // Muscles de l'avant-bras partis de l'humérus : longs fuseaux (v1), point de passage pour contourner le coude ;
+  // attaches extrêmes un peu enfoncées vers l'os (elles plongent dans le gabarit)
+  { name: "Brachio-radial",      g: 6, o: ["H", .68, 2.3, .4],    v: ["U", .12, 2.6, .7],   i: ["R", .94, 1.5, .2],   r0: .5, r1: .5, rb: 2.2, at: .38, c: "#e2b04f" },
+  { name: "Long ext. radial",    g: 7, o: ["H", .82, 2.4, -.1],   v: ["U", .12, 2.4, -.3],  i: ["R", .95, 1.1, -.6],  r0: .5, r1: .5, rb: 1.6, at: .35, c: "#d4a04a" },
+  { name: "Extenseurs des doigts",g: 7, o: ["H", .98, 1.9, -.6],  v: ["U", .12, 1.8, -1.1], i: ["R", .95, .2, -.85], r0: .5, r1: .5, rb: 2.0, at: .33, c: "#c9a24a" },
+  { name: "Ext. ulnaire du carpe",g: 7, o: ["H", .98, 1.8, -.8],  v: ["U", .12, .8, -1.5],  i: ["U", .95, -1.1, -.6], r0: .45, r1: .45, rb: 1.3, at: .35, c: "#b08a3a" },
+  { name: "Fléchisseurs",        g: 8, o: ["H", .98, -2.2, -.2],  v: ["U", .12, -2.2, .7],  i: ["R", .95, .2, .75],   r0: .6, r1: .6, rb: 2.4, at: .33, c: "#8fbf6a" },
+  { name: "Fléch. ulnaire du carpe",g: 8, o: ["H", .98, -2.3, -.7],v: ["U", .12, -2.3, -.6],i: ["U", .95, -1.1, .25], r0: .5, r1: .5, rb: 1.5, at: .35, c: "#76a85a" },
+  { name: "Rond pronateur",      g: 8, o: ["H", .96, -2.1, .2],   i: ["R", .5, 1.3, .3],     r0: .5, r1: .5, rb: 1.4, at: .4, c: "#5f9a55" },
 ];
 // Os et repères ; épicondyles reliés à l'humérus, courts (ils ne doivent pas flotter hors du coude)
 const BONES = [
@@ -117,6 +120,8 @@ const BONES = [
   { a: ["H", .95, -.8, -.3], b: ["H", 1, -2.6, -.5], r: .75 },     // épicondyle médial (plus saillant)
   { a: ["U", -.05, -.2, -1.6], b: ["U", 1, -1.3, -.3], r: .75 },   // cubitus, olécrane en arrière
   { a: ["R", .03, 1.6, .2], b: ["R", 1, 1.3, .2], r: .75 },        // radius
+  { a: ["R", .96, .4, .1], b: ["R", .96, 1.9, .2], r: .8 },        // tête distale du radius : socle large et plat du poignet
+  { a: ["U", .97, -1.3, -.3], b: ["U", .97, -1.3, -.3], r: .75 },  // tête du cubitus
 ];
 // Gabarit sous les muscles (tissu conjonctif) : deux cônes arrondis autour des os, bien à l'intérieur de la surface
 const FILL = [
@@ -126,7 +131,7 @@ const FILL = [
 const HAND = { a: ["R", 1.03, 0, 0], b: ["R", 1.33, 0, 0] };
 const COL = { bone: "#efe9dc", fill: "#c9b3b6", fat: "#e8cf6a" };
 
-let P = { def: .8, fat: .3, mass: 1, flex: 30, pron: 70, lift: 10, cut: 25 };
+let P = { def: .8, fat: .3, mass: 1, flex: 30, pron: 70, lift: 10, effort: 0, cut: 25 };
 const rad = d => d * Math.PI / 180;
 const add = (a, b) => [a[0] + b[0], a[1] + b[1], a[2] + b[2]], sub = (a, b) => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
 const scale = (a, s) => [a[0] * s, a[1] * s, a[2] * s], dot = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
@@ -169,22 +174,24 @@ const hex = h => [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16) / 255);
 const fs = `
 precision highp float;
 uniform vec2 uRes; uniform vec3 uEye, uTarget;
-uniform vec3 uMA[${NM}], uMV[${NM}], uMB[${NM}], uMR[${NM}], uMC[${NM}];
+uniform vec3 uMA[${NM}], uMV[${NM}], uMB[${NM}], uMC[${NM}]; uniform vec4 uMR[${NM}]; uniform float uMG[${NM}], uMK[${NM}];
+uniform vec3 uXA[2], uXB[2], uOle, uBackIn;
 uniform vec3 uBA[${NB}], uBB[${NB}]; uniform float uBR[${NB}];
 uniform vec3 uFA[${NF}], uFB[${NF}]; uniform vec2 uFR[${NF}];
 uniform vec3 uHA, uHB, uHU, uCutP, uCutN;
-uniform float uDef, uFat, uIds, uBones, uFill, uCut;
+uniform float uDef, uFat, uIds, uBones, uFill, uCut, uEffort;
 const vec3 cBone = ${vec(COL.bone)}, cFill = ${vec(COL.fill)}, cFat = ${vec(COL.fat)};
 float smin(float a, float b, float k) { float h = clamp(.5 + .5 * (b - a) / k, 0., 1.); return mix(b, a, h) - k * h * (1. - h); }
-// Morceau de muscle : le segment a → b couvre [t0, t1] de la longueur ; rayon de rt (bouts) à rb (ventre) en sinus,
-// bouts arrondis (le segment est clampé). Comme la v1.
-float musclePiece(vec3 p, vec3 a, vec3 b, float t0, float t1, vec3 r) {
+// Morceau de muscle : le segment a → b couvre [t0, t1] de la longueur ; rayon r0 (origine) → rb (ventre) → r1 (insertion)
+// en sinus, bouts arrondis (le segment est clampé). Comme la v1. r = (r0, r1, rb, at).
+float musclePiece(vec3 p, vec3 a, vec3 b, float t0, float t1, vec4 r) {
   vec3 ab = b - a; float s = clamp(dot(p - a, ab) / max(dot(ab, ab), 1e-4), 0., 1.);
-  float t = mix(t0, t1, s), u = t < r.z ? t / r.z : (1. - t) / (1. - r.z);
-  return length(p - a - ab * s) - (r.x + (r.y - r.x) * sin(1.5707963 * clamp(u, 0., 1.)));
+  float t = mix(t0, t1, s);
+  float rr = t < r.w ? mix(r.x, r.z, sin(1.5707963 * clamp(t / r.w, 0., 1.))) : mix(r.y, r.z, sin(1.5707963 * clamp((1. - t) / (1. - r.w), 0., 1.)));
+  return length(p - a - ab * s) - rr;
 }
 // Muscle : ligne brisée a → v → b. Simple min des deux morceaux (même rayon au point de passage : pas de saut, pas de bosse).
-float muscle(vec3 p, vec3 a, vec3 v, vec3 b, vec3 r) {
+float muscle(vec3 p, vec3 a, vec3 v, vec3 b, vec4 r) {
   float L1 = length(v - a), L2 = length(b - v), tv = L1 / (L1 + L2);
   return min(musclePiece(p, a, v, 0., tv, r), musclePiece(p, v, b, tv, 1., r)) * .8;
 }
@@ -207,14 +214,34 @@ float ellipsoid(vec3 p, vec3 c, vec3 ax, vec3 up, vec3 r) {
 }
 float bonesField(vec3 p) { float d = 1e3; for (int i = 0; i < ${NB}; i++) d = smin(d, capsule(p, uBA[i], uBB[i], uBR[i]), .5);
   d = smin(d, ellipsoid(p, (uHA + uHB) * .5, normalize(uHB - uHA), uHU, vec3(2.1, .8, length(uHB - uHA) * .55)), .8); return d; }
+// Épaisseur relative de la graisse : plus épaisse sur le haut du bras (surtout à l'arrière et à l'intérieur) et sur le tiers
+// proximal de l'avant-bras, mince au poignet et sur la pointe du coude.
+float fatAt(vec3 p) {
+  vec3 hd = uXB[0] - uXA[0], fd = uXB[1] - uXA[1];
+  float th = clamp(dot(p - uXA[0], hd) / dot(hd, hd), 0., 1.), tf = clamp(dot(p - uXA[1], fd) / dot(fd, fd), 0., 1.);
+  vec3 rh = p - uXA[0] - hd * th; float dh = length(rh), df = length(p - uXA[1] - fd * tf);
+  float wh = 1.15 + .3 * clamp(dot(rh / (dh + 1e-4), uBackIn), 0., 1.);
+  float wf = mix(1.05, .35, smoothstep(.3, 1., tf));
+  float w = mix(wh, wf, smoothstep(-2., 2., dh - df));
+  return w * mix(.3, 1., smoothstep(1.5, 4.5, length(p - uOle)));
+}
 // x = distance, y = composant le plus « dedans » (n° du muscle, -2 os, -3 gabarit), z = sa distance (< 0 : on est dedans)
 vec3 field(vec3 p) {
   float db = bonesField(p), d = db, best = db, id = -2.;
   if (uBones < .5) {
+    // Réunion à deux niveaux : entre groupes, la définition (adoucie par la graisse, durcie par l'effort) ;
+    // dans un groupe (les 3 deltoïdes, le triceps et son tendon…), jamais moins que k du groupe.
+    float kInter = (uDef + .6 * uFat) * (1. - .35 * uEffort);
     if (uFill > .5) { float f = 1e3; for (int i = 0; i < ${NF}; i++) f = min(f, roundCone(p, uFA[i], uFB[i], uFR[i].x, uFR[i].y));
-      if (f < best) { best = f; id = -3.; } d = smin(d, f, max(uDef, .5)); }
-    for (int i = 0; i < ${NM}; i++) { float m = muscle(p, uMA[i], uMV[i], uMB[i], uMR[i]); if (m < best) { best = m; id = float(i); } d = smin(d, m, uDef); }
-    d -= uFat;   // graisse : une couche qui épaissit et adoucit encore
+      if (f < best) { best = f; id = -3.; } d = smin(d, f, max(kInter, .5)); }
+    float g = 1e3, gPrev = -1.;
+    for (int i = 0; i < ${NM}; i++) {
+      float m = muscle(p, uMA[i], uMV[i], uMB[i], uMR[i]); if (m < best) { best = m; id = float(i); }
+      if (uMG[i] != gPrev) { d = smin(d, g, kInter); g = 1e3; gPrev = uMG[i]; }
+      g = smin(g, m, max(kInter, uMK[i]));
+    }
+    d = smin(d, g, kInter);
+    d -= uFat * fatAt(p);   // graisse : une couche qui épaissit et adoucit encore, selon la région
     if (db < 0.) { best = db; id = -2.; }   // dans la coupe, l'os passe devant le gabarit qui l'entoure
   }
   if (uCut > .5) d = max(d, dot(p - uCutP, uCutN));
@@ -278,13 +305,19 @@ function draw() {
   gl.uniform2f(U("uRes"), cv.width, cv.height);
   gl.uniform3f(U("uEye"), target[0] + dist * Math.cos(pitch) * Math.sin(yaw), target[1] + dist * Math.sin(pitch), target[2] + dist * Math.cos(pitch) * Math.cos(yaw));
   gl.uniform3fv(U("uTarget"), target);
-  const A = [], V = [], B = [], R = [], C = [];
+  const A = [], V = [], B = [], R = [], C = [], G = [], K = [];
   MUSCLES.forEach(m => {
     const pts = musclePoints(m), swell = Math.sqrt(m.L0 / Math.max(pathLength(pts), 1));   // volume conservé
+    const effort = m.tendon ? 1 : 1 + .18 * P.effort;   // contraction active : le ventre gonfle, pas le tendon
     A.push(...pts[0]); V.push(...pts[1]); B.push(...pts[2]);
-    R.push(m.rt * P.mass, m.rb * P.mass * swell, m.at); C.push(...hex(m.c));
+    R.push(m.r0 * P.mass, m.r1 * P.mass, m.rb * P.mass * swell * effort, m.at - (m.peak ? .08 * P.effort : 0));
+    C.push(...hex(m.c)); G.push(m.g); K.push(m.k || .8);
   });
-  gl.uniform3fv(U("uMA"), A); gl.uniform3fv(U("uMV"), V); gl.uniform3fv(U("uMB"), B); gl.uniform3fv(U("uMR"), R); gl.uniform3fv(U("uMC"), C);
+  gl.uniform3fv(U("uMA"), A); gl.uniform3fv(U("uMV"), V); gl.uniform3fv(U("uMB"), B); gl.uniform4fv(U("uMR"), R); gl.uniform3fv(U("uMC"), C);
+  gl.uniform1fv(U("uMG"), G); gl.uniform1fv(U("uMK"), K);
+  gl.uniform3fv(U("uXA"), [...point(["H", 0, 0, 0]), ...point(["U", 0, 0, 0])]); gl.uniform3fv(U("uXB"), [...point(["H", 1, 0, 0]), ...point(["U", 1, 0, 0])]);
+  gl.uniform3fv(U("uOle"), point(["U", -.05, -.2, -1.8]));
+  gl.uniform3fv(U("uBackIn"), norm(sub(point(["H", .5, -1, -1]), point(["H", .5, 0, 0]))));
   const BA = [], BB = [], BR = [];
   BONES.forEach(b => { BA.push(...point(b.a)); BB.push(...point(b.b)); BR.push(b.r); });
   gl.uniform3fv(U("uBA"), BA); gl.uniform3fv(U("uBB"), BB); gl.uniform1fv(U("uBR"), BR);
@@ -292,7 +325,7 @@ function draw() {
   const ha = point(HAND.a), hb = point(HAND.b), palmUp = norm(sub(point(["R", 1.1, 0, 1]), point(["R", 1.1, 0, 0])));
   gl.uniform3fv(U("uHA"), ha); gl.uniform3fv(U("uHB"), hb); gl.uniform3fv(U("uHU"), palmUp);
   const cut = cutPlane(); gl.uniform3fv(U("uCutP"), cut.p); gl.uniform3fv(U("uCutN"), cut.n);
-  gl.uniform1f(U("uDef"), P.def); gl.uniform1f(U("uFat"), P.fat);
+  gl.uniform1f(U("uDef"), P.def); gl.uniform1f(U("uFat"), P.fat); gl.uniform1f(U("uEffort"), P.effort);
   [["ids", "uIds"], ["bones", "uBones"], ["fill", "uFill"], ["cutOn", "uCut"]].forEach(([id, u]) => gl.uniform1f(U(u), document.getElementById(id).checked ? 1 : 0));
   gl.drawArrays(gl.TRIANGLES, 0, 3);
   const deg = a => Math.round(((a * 180 / Math.PI) % 360 + 540) % 360 - 180);
