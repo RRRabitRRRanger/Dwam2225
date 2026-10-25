@@ -112,6 +112,8 @@ Des outils dont l'auteur a besoin dans Unreal, rangés ici pour ne pas les perdr
 
 ## Références à creuser
 
+**Précédents de l'industrie (GDC, SIGGRAPH, blogs), classés par thème avec les plans qui manquent : [[References_Precedents]].**
+
 Liens donnés par l'auteur, pas encore rattachés à un plan.
 
 | Référence | Lien | Pour quoi |
@@ -221,3 +223,4 @@ Liens donnés par l'auteur, pas encore rattachés à un plan.
 | 2026-10-25 (atelier web) | Export du squelette, des pièces et des ancres en JSON (`CharacterKit.Export.Skeleton`) ; artefact « Atelier du mannequin » (prototype de l'interface M5). Squelette UE5 vérifié : torsion de l'avant-bras présente, doigts complets, orteils en un seul os. |
 | 2026-10-25 (atelier des pièces) | Idées de l'auteur : muscles séparés en pièces, gabarits de phalanges et de bouts de doigts, tête par plans ; blendshapes remplacés (gabarit paramétrique, WPO + CPD). Artefact « Atelier des pièces » : pièces décrites par des coupes le long de l'os, éditables à la souris. |
 | 2026-10-25 (fin de journée) | Retours de l'auteur sur les ateliers (bouts à tester, mode projection de plans, muscles et segmentation manquants, vue d'ensemble, pourquoi deux ateliers) ; limites notées : MDF non refait en packagé pour un gabarit regénéré (piste proxys), CPD insuffisants pour des blendshapes (piste texture / modificateur générique), deltas stockés à rediscuter. Rien de lancé. |
+| 2026-10-25 (références 1/2) | Gros dump de liens de l'auteur (« des précédents », préparés avec une autre IA) : [[References_Precedents]] créé, classé par thème (rendu et BRDF, textures orientées et anti-répétition, destruction et découpe, pluie, érosion, argile SDF, yeux, production). Vérifiés en ligne : *MyLibrary*, poster des textures volumiques en couches, GDC 2024 de *The Finals* (48 diapositives lues), mise à jour destruction de *The Finals*, article Game Developer sur la confiance (performance d'acteur). Le reste est noté « de mémoire » ou `À COMPLÉTER` (HAL et Wiley refusent l'accès). Six plans manquants proposés, rien de créé. Partie 2 annoncée. |
