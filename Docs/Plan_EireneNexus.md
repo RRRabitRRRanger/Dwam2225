@@ -4,6 +4,8 @@
 
 > Statut : 💭 **idée**, en discussion avec l'auteur (2026-10-04). Rien n'est décidé. Les notes d'origine de l'auteur sont perdues ; cette page reprend ce qu'il en a redit.
 
+> **2026-10-25** : nouvelles idées de l'auteur repérées dans ses conversations avec Gemini (factions imbriquées à paliers, morale séparée du camp, marginaux comme prise, scission quand une faction obtient le monopole, curseur thermostat), **à confirmer avant d'être versées ici** : [[Confrontation_Gemini_Narration]].
+
 ## Intention (auteur, 2026-10-04)
 
 - Un **système de factions** qui tourne sur des **principes de théorie des jeux**, et dont il sort **des histoires que personne n'a écrites**. C'est la seule chose gardée de l'esprit du Nemesis system.
