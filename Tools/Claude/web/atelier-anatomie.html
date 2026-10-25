@@ -162,12 +162,19 @@ vec2 musclePiece(vec3 p, vec3 a, vec3 b, float t0, float t1, vec4 r) {
   float g = t < r.w ? sin(1.5707963 * clamp(t / r.w, 0., 1.)) : sin(1.5707963 * clamp((1. - t) / (1. - r.w), 0., 1.));
   return vec2(length(p - a - ab * s) - (t < r.w ? mix(r.x, r.z, g) : mix(r.y, r.z, g)), g);
 }
-// Muscle : ligne brisée a → v → b. Avec un vrai point de passage, les deux morceaux sont réunis en douceur (pas de pli) ;
-// sans (v = a), simple min (pas de bosse au milieu).
+// Muscle sans point de passage (v = a) : un seul morceau droit.
+// Avec un point de passage : une courbe (Bézier quadratique qui passe par v à mi-parcours) découpée en quatre morceaux
+// courts, réunis en douceur. Deux morceaux droits en angle laissaient une boule à l'extérieur du pli (gastrocnémien).
 vec2 muscleG(vec3 p, vec3 a, vec3 v, vec3 b, vec4 r) {
-  float L1 = length(v - a), L2 = length(b - v), tv = L1 / (L1 + L2);
-  vec2 m1 = musclePiece(p, a, v, 0., tv, r), m2 = musclePiece(p, v, b, tv, 1., r);
-  return vec2((L1 > .01 ? smin(m1.x, m2.x, .5) : min(m1.x, m2.x)) * .8, m1.x < m2.x ? m1.y : m2.y);
+  if (length(v - a) < .01) { vec2 m = musclePiece(p, a, b, 0., 1., r); return vec2(m.x * .8, m.y); }
+  vec3 c = 2. * v - .5 * (a + b);
+  vec3 q1 = .5625 * a + .375 * c + .0625 * b, q3 = .0625 * a + .375 * c + .5625 * b;
+  float l1 = length(q1 - a), l2 = l1 + length(v - q1), l3 = l2 + length(q3 - v), L = l3 + length(b - q3);
+  vec2 m = musclePiece(p, a, q1, 0., l1 / L, r), n;
+  n = musclePiece(p, q1, v, l1 / L, l2 / L, r); m = vec2(smin(m.x, n.x, .3), m.x < n.x ? m.y : n.y);
+  n = musclePiece(p, v, q3, l2 / L, l3 / L, r); m = vec2(smin(m.x, n.x, .3), m.x < n.x ? m.y : n.y);
+  n = musclePiece(p, q3, b, l3 / L, 1., r); m = vec2(smin(m.x, n.x, .3), m.x < n.x ? m.y : n.y);
+  return vec2(m.x * .8, m.y);
 }
 float capsule(vec3 p, vec3 a, vec3 b, float r) { vec3 ab = b - a; float t = clamp(dot(p - a, ab) / max(dot(ab, ab), 1e-4), 0., 1.); return length(p - (a + ab * t)) - r; }
 // Cône arrondi (Inigo Quilez) : le gabarit
@@ -359,7 +366,8 @@ function render() {
   gl.uniform4fv(U("uSD"), S.flatMap(q => q.dir ? [...norm(sub(point(q.dir.to), point(q.dir.from))), q.dir.w] : [0, 0, 0, 0]));
   if (D.fat.thin.length) { gl.uniform3fv(U("uTP"), D.fat.thin.flatMap(q => point(q.p))); gl.uniform3fv(U("uTR"), D.fat.thin.flatMap(q => [q.r[0], q.r[1], q.min])); }
   if (D.masses.length) {
-    gl.uniform3fv(U("uKC"), D.masses.flatMap(k => point(k.c)));
+    // une masse peut suivre un second os en partie (la fesse suit le fémur à moitié quand la hanche plie)
+    gl.uniform3fv(U("uKC"), D.masses.flatMap(k => k.c2 ? lerp(point(k.c), point(k.c2), k.follow ?? .5) : point(k.c)));
     gl.uniform3fv(U("uKX"), D.masses.flatMap(k => rotV(F[k.c[0]], [1, 0, 0]))); gl.uniform3fv(U("uKY"), D.masses.flatMap(k => rotV(F[k.c[0]], [0, 1, 0])));
     gl.uniform3fv(U("uKR"), D.masses.flatMap(k => k.r.map(r => r + (k.fat || 0) * P.fat)));   // la masse grossit avec la graisse
   }
