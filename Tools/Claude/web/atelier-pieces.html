@@ -1,0 +1,278 @@
+<title>Atelier des pièces</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Condensed:wght@400;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout : établi — vue 3D de la pièce, à droite l'éditeur de coupe (la forme 2D à une hauteur de l'os) et ses réglages. */
+:root {
+  --bg: #e9e6e1; --panel: #f6f4f0; --fg: #23211e; --muted: #6d6860; --line: #d3cec6;
+  --wood: #b07a45; --wood-soft: #e8d4bd; --view: #2b2a28; --ink: #3a6ea5;
+  --sans: "IBM Plex Sans Condensed", "Arial Narrow", system-ui, sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, "Consolas", monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #1c1b19; --panel: #24221f; --fg: #ece8e1; --muted: #a39c91; --line: #3a3733; --wood: #d29a62; --wood-soft: #4a3826; --view: #121110; --ink: #7fb0e0; color-scheme: dark } }
+:root[data-theme="dark"] {
+  --bg: #1c1b19; --panel: #24221f; --fg: #ece8e1; --muted: #a39c91; --line: #3a3733; --wood: #d29a62; --wood-soft: #4a3826; --view: #121110; --ink: #7fb0e0; color-scheme: dark }
+html, body { height: 100%; }
+body { background: var(--bg); color: var(--fg); font-family: var(--sans); font-size: 15px; box-sizing: border-box;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 12px; }
+.app { display: grid; grid-template-columns: minmax(0, 1fr) 380px; gap: 14px; height: 100%; }
+.view { position: relative; background: var(--view); border-radius: 6px; overflow: hidden; min-height: 420px; }
+.view canvas { display: block; width: 100%; height: 100%; }
+.hud { position: absolute; left: 12px; bottom: 10px; font: 12px var(--mono); color: #cfc8bd; pointer-events: none; }
+.panel { background: var(--panel); border: 1px solid var(--line); border-radius: 6px; overflow-y: auto; display: flex; flex-direction: column; min-width: 0; }
+.panel section { padding: 12px 14px; border-bottom: 1px solid var(--line); display: grid; gap: 8px; }
+h1 { font-size: 18px; margin: 0; font-weight: 600; }
+h2 { font-size: 11px; margin: 0; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); font-weight: 600; }
+p.note { margin: 0; color: var(--muted); font-size: 13px; line-height: 1.4; }
+.row { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+button { font: 600 13px var(--sans); border: 1px solid var(--line); background: transparent; color: var(--fg); padding: 5px 10px; border-radius: 4px; cursor: pointer; }
+button:hover { border-color: var(--wood); }
+button[aria-pressed="true"] { background: var(--wood); border-color: var(--wood); color: #fff; }
+button:focus-visible, input:focus-visible { outline: 2px solid var(--wood); outline-offset: 2px; }
+.section-editor { width: 100%; aspect-ratio: 1; max-width: 100%; background: var(--bg); border-radius: 4px; touch-action: none; cursor: crosshair; display: block; }
+.slider { display: grid; grid-template-columns: 1fr 56px; align-items: center; column-gap: 8px; }
+.slider label { font-size: 13px; }
+.slider output { font: 12px var(--mono); text-align: right; color: var(--muted); font-variant-numeric: tabular-nums; }
+.slider input { grid-column: 1 / -1; width: 100%; accent-color: var(--wood); margin: 0; }
+.toggle { display: flex; gap: 6px; align-items: center; font-size: 13px; }
+pre.json { font: 11px/1.4 var(--mono); max-height: 140px; overflow: auto; margin: 0; padding: 8px; background: var(--bg); border-radius: 4px; }
+@media (max-width: 800px) { .app { grid-template-columns: 1fr; height: auto; } .view { height: 55vh; } }
+</style>
+
+<div class="app">
+  <div class="view" id="view"><div class="hud">glisser : tourner · molette : zoom · la ligne bleue = l'os</div></div>
+  <div class="panel">
+    <section>
+      <h1>Atelier des pièces</h1>
+      <p class="note">Une pièce du corps décrite par des coupes le long de son os. Tire les points d'une coupe : la forme 3D suit. Même description que le futur générateur Geometry Script d'Unreal.</p>
+    </section>
+    <section>
+      <h2>Gabarit</h2>
+      <div class="row" id="templates"></div>
+    </section>
+    <section>
+      <h2>Coupe</h2>
+      <div class="row" id="stations"></div>
+      <canvas class="section-editor" id="section" width="600" height="600" aria-label="Éditeur de la coupe : tirer les points"></canvas>
+      <div class="row">
+        <label class="toggle"><input type="checkbox" id="sym" checked> Symétrie gauche / droite</label>
+        <button id="copyPrev">Copier la coupe précédente</button>
+      </div>
+      <p class="note">En haut de la coupe : l'avant. À gauche : l'intérieur (vers l'autre jambe, le pouce…). Grille : 1 cm.</p>
+    </section>
+    <section>
+      <h2>Longueur et extrémités</h2>
+      <div class="slider"><label for="len">Longueur le long de l'os</label><output id="lenO"></output><input type="range" id="len" min="1" max="60" step="0.1"></div>
+      <div class="slider"><label for="cap0">Arrondi du début</label><output id="cap0O"></output><input type="range" id="cap0" min="0" max="1" step="0.01"></div>
+      <div class="slider"><label for="cap1">Arrondi de la fin</label><output id="cap1O"></output><input type="range" id="cap1" min="0" max="1" step="0.01"></div>
+    </section>
+    <section>
+      <h2>Description</h2>
+      <div class="row"><button id="copy">Copier le JSON</button><span class="note" id="copied"></span></div>
+      <pre class="json" id="json"></pre>
+    </section>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/three@0.147.0/build/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.147.0/examples/js/controls/OrbitControls.js"></script>
+<script>
+// Une coupe = N rayons (cm) autour de l'axe de l'os, angle 0 = l'avant, sens trigonométrique vu du début de l'os
+// (angle 90° = l'extérieur, 270° = l'intérieur). Les coupes sont réparties le long de la longueur (0 = début, 1 = fin).
+const N = 12;
+const ring = (f) => Array.from({ length: N }, (_, k) => +f(2 * Math.PI * k / N).toFixed(2));
+const ellipse = (front, side, back = front, inner = side) => ring(a => {
+  const c = Math.cos(a), s = Math.sin(a);
+  const ry = c >= 0 ? front : back, rx = s >= 0 ? side : inner;
+  return 1 / Math.sqrt((c / ry) ** 2 + (s / rx) ** 2);
+});
+// Gabarits d'après les références (TACO : cuisse en goutte, intérieur plus saillant ; mollet ; avant-bras qui s'aplatit)
+const TEMPLATES = {
+  "Cuisse": { length: 43, caps: [.6, .5], stations: [0, .25, .55, .85, 1], sections: [
+    ellipse(8.5, 8, 7.5, 9.5), ellipse(8.2, 7.6, 7.2, 9.4), ellipse(7.4, 6.6, 6.6, 7.8), ellipse(6, 5.4, 5.6, 5.6), ellipse(5.4, 5, 5, 5)] },
+  "Mollet": { length: 42, caps: [.5, .5], stations: [0, .2, .4, .75, 1], sections: [
+    ellipse(5, 5.2, 5.6, 5.2), ellipse(5, 5.6, 7.6, 6), ellipse(4.6, 5, 6.6, 5.4), ellipse(3.6, 3.6, 3.8, 3.6), ellipse(3.2, 3.2, 3.4, 3.2)] },
+  "Avant-bras": { length: 27, caps: [.5, .4], stations: [0, .25, .6, 1], sections: [
+    ellipse(4, 4.2, 4.2, 4), ellipse(4.2, 4.8, 4.4, 4.2), ellipse(3.2, 3.8, 3, 3.4), ellipse(2, 3, 2, 2.8)] },
+  "Phalange": { length: 4.2, caps: [.35, .35], stations: [0, .5, 1], sections: [
+    ellipse(.85, 1, .9, 1), ellipse(.75, .85, .8, .85), ellipse(.8, .95, .85, .95)] },
+  "Bout de doigt": { length: 2.6, caps: [.3, 1], stations: [0, .5, 1], sections: [
+    ellipse(.75, .85, .8, .85), ellipse(.7, .85, .85, .85), ellipse(.45, .6, .55, .6)] },
+};
+let piece = null, current = 0, templateName = "Cuisse";
+
+// ---------- interpolation : Catmull-Rom le long de l'os et autour de la coupe ----------
+const cr = (p0, p1, p2, p3, t) => .5 * ((2 * p1) + (-p0 + p2) * t + (2 * p0 - 5 * p1 + 4 * p2 - p3) * t * t + (-p0 + 3 * p1 - 3 * p2 + p3) * t * t * t);
+function radiusAt(sectionIdx, angle, sections) {
+  const s = sections[sectionIdx], u = (angle / (2 * Math.PI)) * N, k = Math.floor(u), t = u - k;
+  const g = (i) => s[((i % N) + N) % N];
+  return Math.max(cr(g(k - 1), g(k), g(k + 1), g(k + 2), t), .05);
+}
+function sectionRadius(v, angle) {
+  const st = piece.stations, n = st.length;
+  let i = 0; while (i < n - 2 && v > st[i + 1]) i++;
+  const t = (v - st[i]) / Math.max(st[i + 1] - st[i], 1e-6);
+  const r = (j) => radiusAt(Math.min(Math.max(j, 0), n - 1), angle, piece.sections);
+  return Math.max(cr(r(i - 1), r(i), r(i + 1), r(i + 2), Math.min(Math.max(t, 0), 1)), .05);
+}
+
+// ---------- maillage : anneaux le long de l'os, extrémités arrondies ----------
+function buildGeometry() {
+  const A = 40, R = 48, CAPR = 10, L = piece.length;
+  const rings = [];
+  // début arrondi : les rayons se referment sur une profondeur cap0 × rayon moyen
+  const meanR = (v) => { let m = 0; for (let k = 0; k < 8; k++) m += sectionRadius(v, k / 8 * 2 * Math.PI); return m / 8; };
+  const d0 = piece.caps[0] * meanR(0), d1 = piece.caps[1] * meanR(1);
+  for (let c = CAPR; c >= 1; c--) { const a = c / CAPR * Math.PI / 2; rings.push({ v: 0, z: -d0 * Math.sin(a), f: Math.cos(a) }); }
+  for (let j = 0; j <= R; j++) rings.push({ v: j / R, z: j / R * L, f: 1 });
+  for (let c = 1; c <= CAPR; c++) { const a = c / CAPR * Math.PI / 2; rings.push({ v: 1, z: L + d1 * Math.sin(a), f: Math.cos(a) }); }
+  const pos = [], idx = [];
+  rings.forEach(rg => {
+    for (let k = 0; k < A; k++) {
+      const a = k / A * 2 * Math.PI, r = sectionRadius(rg.v, a) * Math.max(rg.f, 0.001);
+      // repère Unreal de la pièce : X latéral (extérieur), Y avant, Z le long de l'os
+      pos.push(Math.sin(a) * r, Math.cos(a) * r, rg.z);
+    }
+  });
+  for (let j = 0; j < rings.length - 1; j++) for (let k = 0; k < A; k++) {
+    const a = j * A + k, b = j * A + (k + 1) % A, c = (j + 1) * A + k, d = (j + 1) * A + (k + 1) % A;
+    idx.push(a, c, b, b, c, d);
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3));
+  g.setIndex(idx); g.computeVertexNormals();
+  return g;
+}
+
+// ---------- vue 3D ----------
+const view = document.getElementById("view");
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2)); view.prepend(renderer.domElement);
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(35, 1, .1, 2000);
+const controls = new THREE.OrbitControls(camera, renderer.domElement); controls.enableDamping = true;
+scene.add(new THREE.HemisphereLight(0xfff4e6, 0x2a2622, .8));
+const sun = new THREE.DirectionalLight(0xffffff, .9); sun.position.set(80, 120, 100); scene.add(sun);
+const holder = new THREE.Group(); holder.rotation.x = -Math.PI / 2; scene.add(holder);   // Z de la pièce vers le haut de l'écran
+const mesh = new THREE.Mesh(new THREE.BufferGeometry(), new THREE.MeshStandardMaterial({ color: 0xcaa07a, roughness: .6, side: THREE.DoubleSide }));
+const wire = new THREE.LineSegments(new THREE.BufferGeometry(), new THREE.LineBasicMaterial({ color: 0x5a4632, transparent: true, opacity: .25 }));
+const bone = new THREE.Line(new THREE.BufferGeometry(), new THREE.LineBasicMaterial({ color: 0x7fd3ff, depthTest: false }));
+bone.renderOrder = 3;
+const marker = new THREE.LineLoop(new THREE.BufferGeometry(), new THREE.LineBasicMaterial({ color: 0xe0823a, depthTest: false }));
+marker.renderOrder = 4;
+holder.add(mesh, wire, bone, marker);
+
+function refresh3D(fit) {
+  mesh.geometry.dispose(); mesh.geometry = buildGeometry();
+  wire.geometry.dispose(); wire.geometry = new THREE.WireframeGeometry(mesh.geometry);
+  bone.geometry.setFromPoints([new THREE.Vector3(0, 0, -2), new THREE.Vector3(0, 0, piece.length + 2)]);
+  const v = piece.stations[current], z = v * piece.length, pts = [];
+  for (let k = 0; k < 64; k++) { const a = k / 64 * 2 * Math.PI, r = sectionRadius(v, a) + .05; pts.push(new THREE.Vector3(Math.sin(a) * r, Math.cos(a) * r, z)); }
+  marker.geometry.setFromPoints(pts);
+  if (fit) {
+    const L = piece.length; controls.target.set(0, L / 2, 0);
+    camera.position.set(L * 1.1, L * .8, L * 1.6); camera.near = L / 200; camera.far = L * 50; camera.updateProjectionMatrix();
+  }
+  document.getElementById("json").textContent = JSON.stringify({ Template: templateName, LengthCm: piece.length, Caps: piece.caps, Stations: piece.stations, SectionsCm: piece.sections }, null, 1);
+}
+
+// ---------- éditeur de coupe ----------
+const cv = document.getElementById("section"), ctx = cv.getContext("2d");
+let drag = -1;
+const scaleCm = () => { let m = 0; piece.sections.forEach(s => s.forEach(r => m = Math.max(m, r))); return (cv.width * .42) / (m * 1.15); };
+const toScreen = (k, r, sc) => { const a = 2 * Math.PI * k / N; return [cv.width / 2 + Math.sin(a) * r * sc, cv.height / 2 - Math.cos(a) * r * sc]; };
+function css(name) { return getComputedStyle(document.documentElement).getPropertyValue(name).trim(); }
+function drawSection() {
+  const sc = scaleCm(), W = cv.width, H = cv.height;
+  ctx.clearRect(0, 0, W, H);
+  ctx.strokeStyle = css("--line"); ctx.lineWidth = 1;
+  for (let x = W / 2 % sc; x < W; x += sc) { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H); ctx.stroke(); }
+  for (let y = H / 2 % sc; y < H; y += sc) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke(); }
+  ctx.fillStyle = css("--muted"); ctx.font = "22px " + css("--mono");
+  ctx.fillText("avant", W / 2 - 30, 26); ctx.fillText("intérieur", 8, H / 2 - 8); ctx.fillText("extérieur", W - 112, H / 2 - 8);
+  // coupes voisines en fantôme
+  [current - 1, current + 1].forEach(j => {
+    if (j < 0 || j >= piece.sections.length) return;
+    ctx.beginPath();
+    for (let k = 0; k <= 64; k++) { const a = k / 64 * 2 * Math.PI, r = radiusAt(j, a, piece.sections) * sc; const x = W / 2 + Math.sin(a) * r, y = H / 2 - Math.cos(a) * r; k ? ctx.lineTo(x, y) : ctx.moveTo(x, y); }
+    ctx.strokeStyle = css("--muted"); ctx.setLineDash([6, 6]); ctx.stroke(); ctx.setLineDash([]);
+  });
+  ctx.beginPath();
+  for (let k = 0; k <= 96; k++) { const a = k / 96 * 2 * Math.PI, r = radiusAt(current, a, piece.sections) * sc; const x = W / 2 + Math.sin(a) * r, y = H / 2 - Math.cos(a) * r; k ? ctx.lineTo(x, y) : ctx.moveTo(x, y); }
+  ctx.fillStyle = css("--wood-soft"); ctx.fill(); ctx.strokeStyle = css("--wood"); ctx.lineWidth = 3; ctx.stroke();
+  piece.sections[current].forEach((r, k) => {
+    const [x, y] = toScreen(k, r, sc);
+    ctx.beginPath(); ctx.arc(x, y, k === drag ? 11 : 8, 0, 2 * Math.PI); ctx.fillStyle = css("--ink"); ctx.fill();
+  });
+  ctx.fillStyle = css("--fg"); ctx.font = "22px " + css("--mono");
+  ctx.fillText(`coupe ${current + 1}/${piece.sections.length} · ${(piece.stations[current] * piece.length).toFixed(1)} cm`, 10, H - 14);
+}
+function pointer(e) { const r = cv.getBoundingClientRect(); return [(e.clientX - r.left) * cv.width / r.width, (e.clientY - r.top) * cv.height / r.height]; }
+cv.addEventListener("pointerdown", e => {
+  const [x, y] = pointer(e), sc = scaleCm();
+  let best = -1, bd = 1e9;
+  piece.sections[current].forEach((r, k) => { const [px, py] = toScreen(k, r, sc); const d = Math.hypot(px - x, py - y); if (d < bd) { bd = d; best = k; } });
+  if (bd < 40) { drag = best; cv.setPointerCapture(e.pointerId); drawSection(); }
+});
+cv.addEventListener("pointermove", e => {
+  if (drag < 0) return;
+  const [x, y] = pointer(e), sc = scaleCm(), a = 2 * Math.PI * drag / N;
+  // le point glisse sur son rayon (angle fixe), longueur = projection du curseur
+  const r = Math.max(((x - cv.width / 2) * Math.sin(a) - (y - cv.height / 2) * Math.cos(a)) / sc, .1);
+  const s = piece.sections[current];
+  s[drag] = +r.toFixed(2);
+  if (document.getElementById("sym").checked) { const m = (N - drag) % N; s[m] = s[drag]; }
+  drawSection(); refresh3D(false);
+});
+cv.addEventListener("pointerup", () => { drag = -1; drawSection(); });
+
+// ---------- interface ----------
+function slider(id, get, set, fmt) {
+  const input = document.getElementById(id), out = document.getElementById(id + "O");
+  const sync = () => { input.value = get(); out.textContent = fmt(get()); };
+  input.addEventListener("input", () => { set(+input.value); out.textContent = fmt(+input.value); refresh3D(false); drawSection(); });
+  return sync;
+}
+const syncs = [
+  slider("len", () => piece.length, v => piece.length = v, v => v.toFixed(1) + " cm"),
+  slider("cap0", () => piece.caps[0], v => piece.caps[0] = v, v => v.toFixed(2)),
+  slider("cap1", () => piece.caps[1], v => piece.caps[1] = v, v => v.toFixed(2)),
+];
+function stationsUI() {
+  const box = document.getElementById("stations"); box.innerHTML = "";
+  piece.stations.forEach((v, i) => {
+    const b = document.createElement("button"); b.textContent = `${i + 1} · ${(v * piece.length).toFixed(0)} cm`;
+    b.setAttribute("aria-pressed", String(i === current));
+    b.addEventListener("click", () => { current = i; stationsUI(); drawSection(); refresh3D(false); });
+    box.append(b);
+  });
+}
+function load(name) {
+  templateName = name;
+  piece = JSON.parse(JSON.stringify(TEMPLATES[name]));
+  current = Math.min(1, piece.sections.length - 1);
+  document.querySelectorAll("#templates button").forEach(b => b.setAttribute("aria-pressed", String(b.textContent === name)));
+  syncs.forEach(s => s()); stationsUI(); drawSection(); refresh3D(true);
+}
+Object.keys(TEMPLATES).forEach(name => {
+  const b = document.createElement("button"); b.textContent = name; b.addEventListener("click", () => load(name));
+  document.getElementById("templates").append(b);
+});
+document.getElementById("copyPrev").addEventListener("click", () => {
+  if (current === 0) return;
+  piece.sections[current] = piece.sections[current - 1].slice(); drawSection(); refresh3D(false);
+});
+document.getElementById("copy").addEventListener("click", () => {
+  const msg = document.getElementById("copied"), pre = document.getElementById("json");
+  navigator.clipboard.writeText(pre.textContent).then(() => msg.textContent = "Copié.").catch(() => {
+    const range = document.createRange(); range.selectNodeContents(pre); const sel = getSelection(); sel.removeAllRanges(); sel.addRange(range);
+    msg.textContent = "Sélectionné : Ctrl+C pour copier.";
+  });
+});
+function resize() { const w = view.clientWidth, h = view.clientHeight; renderer.setSize(w, h, false); camera.aspect = w / Math.max(h, 1); camera.updateProjectionMatrix(); }
+new ResizeObserver(resize).observe(view);
+matchMedia("(prefers-color-scheme: dark)").addEventListener("change", drawSection);
+load("Cuisse"); resize();
+(function loop() { controls.update(); renderer.render(scene, camera); requestAnimationFrame(loop); })();
+</script>
