@@ -1,6 +1,6 @@
 {
   "name": "Jambe",
-  "description": "Même moteur que le bras : chaque muscle est un volume rond tendu entre son origine et son insertion. Quadriceps sur la rotule (qui suit le tibia), ischio-jambiers et gracile qui contournent le genou par l'arrière, triceps sural jusqu'au talon par le tendon d'Achille. Les fessiers sont des amorces : le bassin viendra avec le torse. Le pied est une plaque provisoire.",
+  "description": "Même moteur que le bras : chaque muscle est un volume rond tendu entre son origine et son insertion. Quadriceps sur la rotule (qui suit le tibia), ischio-jambiers et gracile qui contournent le genou par l'arrière, mollet en cœur (gastrocnémiens) sur le tendon d'Achille, soléaire qui dépasse des deux côtés. La fesse est une masse (elle a sa forme même sans muscle) plus le grand fessier en nappe. Genou : condyles, plateau et rotule en volumes propres. Le pied est une plaque provisoire.",
   "frame": "cm ; x = extérieur, y = haut, z = avant ; tête du fémur à l'origine. Une attache s'écrit [repère, t, x, z] : t le long de l'os (0 = haut, 1 = bas) ; pour un repère « raw », [repère, x, y, z].",
   "bones": [
     {"id": "P", "name": "Bassin (fixe)", "raw": true, "ue": "pelvis"},
@@ -14,9 +14,18 @@
     {"id": "knee", "name": "Flexion du genou (°)", "min": 0, "max": 140, "step": 1, "value": 10},
     {"id": "ankle", "name": "Cheville, + = pointe en haut (°)", "min": -40, "max": 30, "step": 1, "value": 0}
   ],
+  "posePresets": [
+    {"name": "Pas en avant", "values": {"hip": 30, "abd": 0, "knee": 20, "ankle": 5}},
+    {"name": "Assis", "values": {"hip": 90, "abd": 5, "knee": 90, "ankle": 0}},
+    {"name": "Accroupi", "values": {"hip": 110, "abd": 10, "knee": 135, "ankle": 25}},
+    {"name": "Genou levé", "values": {"hip": 70, "abd": 0, "knee": 100, "ankle": -10}},
+    {"name": "Sur la pointe", "values": {"hip": 0, "abd": 0, "knee": 5, "ankle": -35}}
+  ],
   "poseNote": "La rotule suit le tibia : quand le genou plie, le quadriceps s'étire par-dessus. Les ischio-jambiers et le gracile passent derrière le genou, le triceps sural derrière la cheville.",
   "muscles": [
-    {"name": "Grand fessier (amorce)", "g": "fessiers", "k": 1.2, "o": ["P", -7, 4, -8], "i": ["F", 0.25, 4.0, -1.6], "r0": 3.5, "r1": 1.0, "rb": 5.5, "at": 0.45, "c": "#c46a5a"},
+    {"name": "Grand fessier, faisceau haut", "g": "grand fessier", "k": 2.0, "o": ["P", -7, 7, -8], "i": ["F", 0.12, 5.2, -1.0], "r0": 2.0, "r1": 1.2, "rb": 3.0, "at": 0.45, "c": "#c46a5a"},
+    {"name": "Grand fessier, faisceau moyen", "g": "grand fessier", "k": 2.0, "o": ["P", -8.5, 2, -8.5], "i": ["F", 0.18, 4.6, -1.3], "r0": 2.2, "r1": 1.2, "rb": 3.8, "at": 0.45, "c": "#b85a4c"},
+    {"name": "Grand fessier, faisceau bas", "g": "grand fessier", "k": 2.0, "o": ["P", -8, -4, -7], "i": ["F", 0.26, 3.6, -1.2], "r0": 2.0, "r1": 1.2, "rb": 3.4, "at": 0.4, "c": "#a84c40"},
     {"name": "Moyen fessier (amorce)", "g": "fessiers", "k": 1.2, "o": ["P", 2.5, 9, -2], "i": ["F", 0.05, 5.8, -0.3], "r0": 2.6, "r1": 1.4, "rb": 3.0, "at": 0.4, "c": "#d98a6a"},
     {"name": "Tenseur du fascia lata", "g": "fessiers", "k": 1.2, "o": ["P", 4.8, 7.5, 4.2], "i": ["F", 0.25, 5.0, 1.2], "r0": 1.2, "r1": 0.8, "rb": 1.8, "at": 0.45, "c": "#e8a07a"},
     {"name": "Bande ilio-tibiale", "g": "bande", "tendon": true, "o": ["F", 0.25, 5.0, 0.6], "i": ["T", 0.03, 3.0, 1.2], "r0": 0.8, "r1": 0.6, "rb": 0.9, "at": 0.5, "c": "#ece6da"},
@@ -31,14 +40,18 @@
     {"name": "Biceps fémoral", "g": "ischio-jambiers", "o": ["P", -4.2, -4.8, -5.2], "v": ["F", 0.9, 3.0, -2.6], "i": ["T", 0.05, 3.5, -1.0], "r0": 1.2, "r1": 0.7, "rb": 3.6, "at": 0.5, "c": "#7a8fc9"},
     {"name": "Semi-tendineux", "g": "ischio-jambiers", "o": ["P", -4.6, -4.8, -5.0], "v": ["F", 0.92, -2.4, -2.8], "i": ["T", 0.08, -2.4, 1.0], "r0": 1.2, "r1": 0.5, "rb": 3.0, "at": 0.38, "c": "#93a6dc"},
     {"name": "Semi-membraneux", "g": "ischio-jambiers", "o": ["P", -4.0, -4.2, -4.4], "v": ["F", 0.9, -2.1, -2.3], "i": ["T", 0.03, -2.6, -0.7], "r0": 1.0, "r1": 0.7, "rb": 3.4, "at": 0.65, "c": "#6474a8"},
-    {"name": "Gastrocnémien médial", "g": "triceps sural", "peak": true, "o": ["F", 0.97, -2.2, -1.9], "i": ["Ft", -0.2, -3.8, -4.6], "r0": 1.3, "r1": 0.7, "rb": 3.8, "at": 0.27, "c": "#8fbf6a", "v": ["T", 0.28, -1.9, -4.2]},
-    {"name": "Gastrocnémien latéral", "g": "triceps sural", "peak": true, "o": ["F", 0.97, 2.2, -1.9], "i": ["Ft", 0.4, -3.8, -4.6], "r0": 1.2, "r1": 0.7, "rb": 3.2, "at": 0.25, "c": "#76a85a", "v": ["T", 0.26, 1.7, -3.8]},
-    {"name": "Soléaire", "g": "triceps sural", "o": ["T", 0.12, 1.5, -1.6], "i": ["Ft", 0.1, -3.8, -4.4], "r0": 1.4, "r1": 0.8, "rb": 3.2, "at": 0.45, "c": "#5f9a55", "v": ["T", 0.55, 0.4, -3.0]},
-    {"name": "Tendon d'Achille", "g": "triceps sural", "tendon": true, "o": ["T", 0.72, 0.2, -2.4], "i": ["Ft", 0.1, -3.9, -4.6], "r0": 0.9, "r1": 0.8, "rb": 1.0, "at": 0.5, "c": "#ece6da"},
-    {"name": "Tibial antérieur", "g": "loge antérieure", "o": ["T", 0.1, 1.9, 1.5], "v": ["T", 0.93, 0.4, 2.0], "i": ["Ft", -1.6, -4.0, 4.5], "r0": 1.0, "r1": 0.5, "rb": 2.3, "at": 0.3, "c": "#c9a24a"},
-    {"name": "Long extenseur des orteils", "g": "loge antérieure", "o": ["T", 0.1, 3.0, 0.6], "v": ["T", 0.95, 1.1, 2.0], "i": ["Ft", 0.6, -4.2, 8.5], "r0": 0.8, "r1": 0.5, "rb": 1.5, "at": 0.35, "c": "#b08a3a"},
-    {"name": "Long fibulaire", "g": "fibulaires", "o": ["T", 0.08, 3.8, -0.4], "v": ["T", 1.0, 3.6, -1.8], "i": ["Ft", 2.2, -5.6, 3.0], "r0": 0.9, "r1": 0.5, "rb": 1.8, "at": 0.3, "c": "#d4a04a"},
-    {"name": "Court fibulaire", "g": "fibulaires", "o": ["T", 0.5, 3.8, -0.6], "v": ["T", 1.0, 3.6, -1.7], "i": ["Ft", 2.6, -5.4, 4.5], "r0": 0.7, "r1": 0.5, "rb": 1.3, "at": 0.45, "c": "#e2c06a"}
+    {"name": "Tibial antérieur", "g": "loge antérieure", "o": ["T", 0.1, 1.9, 1.5], "v": ["T", 0.93, 0.4, 2.0], "i": ["Ft", -1.6, -4.0, 4.5], "r0": 1.0, "r1": 0.5, "rb": 2.0, "at": 0.3, "c": "#c9a24a"},
+    {"name": "Long extenseur des orteils", "g": "loge antérieure", "o": ["T", 0.1, 3.0, 0.6], "v": ["T", 0.95, 1.1, 2.0], "i": ["Ft", 0.6, -4.2, 8.5], "r0": 0.8, "r1": 0.5, "rb": 1.2, "at": 0.35, "c": "#b08a3a"},
+    {"name": "Long fibulaire", "g": "fibulaires", "o": ["T", 0.08, 3.3, -0.5], "v": ["T", 1.0, 3.6, -1.8], "i": ["Ft", 2.2, -5.6, 3.0], "r0": 0.9, "r1": 0.5, "rb": 1.4, "at": 0.3, "c": "#d4a04a"},
+    {"name": "Court fibulaire", "g": "fibulaires", "o": ["T", 0.5, 3.8, -0.6], "v": ["T", 1.0, 3.6, -1.7], "i": ["Ft", 2.6, -5.4, 4.5], "r0": 0.7, "r1": 0.5, "rb": 1.1, "at": 0.45, "c": "#e2c06a"},
+    {"name": "Gastrocnémien médial", "g": "triceps sural", "peak": true, "o": ["F", 0.97, -2.0, -1.6], "v": ["T", 0.26, -2.2, -5.6], "i": ["T", 0.55, -0.6, -3.1], "r0": 1.3, "r1": 1.0, "rb": 4.0, "at": 0.5, "c": "#8fbf6a"},
+    {"name": "Gastrocnémien latéral", "g": "triceps sural", "peak": true, "o": ["F", 0.97, 2.0, -1.6], "v": ["T", 0.2, 2.0, -5.2], "i": ["T", 0.47, 0.6, -3.1], "r0": 1.2, "r1": 1.0, "rb": 3.4, "at": 0.45, "c": "#76a85a"},
+    {"name": "Soléaire, bord médial", "g": "triceps sural", "o": ["T", 0.2, -1.4, -1.2], "v": ["T", 0.55, -1.9, -2.8], "i": ["T", 0.82, -0.4, -2.4], "r0": 1.2, "r1": 0.8, "rb": 1.8, "at": 0.5, "c": "#5f9a55"},
+    {"name": "Soléaire, bord latéral", "g": "triceps sural", "o": ["T", 0.12, 2.8, -1.2], "v": ["T", 0.5, 2.4, -2.8], "i": ["T", 0.82, 0.4, -2.4], "r0": 1.2, "r1": 0.8, "rb": 2.0, "at": 0.45, "c": "#4f8a48"},
+    {"name": "Tendon d'Achille", "g": "triceps sural", "tendon": true, "o": ["T", 0.5, 0, -3.1], "i": ["Ft", 0.1, -3.7, -4.3], "r0": 1.3, "r1": 0.9, "rb": 0.75, "at": 0.65, "c": "#ece6da"}
+  ],
+  "masses": [
+    {"name": "Masse de la fesse", "c": ["P", -3, -1, -6.5], "r": [6.0, 7.5, 4.5], "fat": 1.0}
   ],
   "skeleton": [
     {"name": "Crête iliaque (amorce)", "a": ["P", -2, 9, -4], "b": ["P", 4.5, 10, 1], "r": 1.4},
@@ -49,24 +62,27 @@
     {"name": "Col du fémur", "a": ["F", 0, 0, 0], "b": ["F", 0.08, 4.5, 0], "r": 1.6},
     {"name": "Grand trochanter", "a": ["F", 0.07, 5.5, -0.6], "b": ["F", 0.07, 5.5, -0.6], "r": 1.8},
     {"name": "Fémur", "a": ["F", 0.1, 4, 0], "b": ["F", 0.95, 0.8, 0.3], "r": 1.4},
-    {"name": "Condyles du fémur", "a": ["F", 0.99, -3.0, -0.8], "b": ["F", 0.99, 3.0, -0.8], "r": 1.7},
-    {"name": "Rotule", "a": ["T", -0.1, 0.6, 3.1], "b": ["T", -0.03, 0.6, 3.1], "r": 1.2},
-    {"name": "Plateau du tibia", "a": ["T", 0.03, -3, 0], "b": ["T", 0.03, 3, 0], "r": 1.5},
     {"name": "Tubérosité du tibia", "a": ["T", 0.09, 0.4, 2.1], "b": ["T", 0.09, 0.4, 2.1], "r": 0.9},
     {"name": "Tibia", "a": ["T", 0.06, 0, 0.9], "b": ["T", 0.94, -0.5, 0.3], "r": 1.15},
     {"name": "Tête de la fibula", "a": ["T", 0.04, 3.4, -1.0], "b": ["T", 0.04, 3.4, -1.0], "r": 0.9},
     {"name": "Fibula", "a": ["T", 0.05, 3.3, -1.0], "b": ["T", 0.95, 3.4, -0.6], "r": 0.55},
     {"name": "Malléole médiale", "a": ["T", 0.99, -1.6, 0.2], "b": ["T", 0.99, -1.6, 0.2], "r": 0.9},
     {"name": "Malléole latérale", "a": ["T", 1.02, 3.3, -0.8], "b": ["T", 1.02, 3.3, -0.8], "r": 0.85},
-    {"name": "Talus", "a": ["Ft", 0.2, -2.5, 0], "b": ["Ft", 0.2, -2.5, 0], "r": 1.6},
-    {"name": "Calcanéus", "a": ["Ft", 0.3, -4.2, -4], "b": ["Ft", 0.3, -4.5, -1], "r": 2.2}
+    {"name": "Talus", "a": ["Ft", 0.2, -2.5, 0], "b": ["Ft", 0.2, -2.5, 0], "r": 1.4},
+    {"name": "Calcanéus", "a": ["Ft", 0.3, -4.2, -4], "b": ["Ft", 0.3, -4.5, -1], "r": 1.9}
   ],
   "plates": [
+    {"name": "Condyles du fémur", "a": ["F", 0.93, 0, -0.6], "b": ["F", 1.0, 0, -0.6], "up": [["F", 0.965, 0, -1], ["F", 0.965, 0, 0]], "r": [4.2, 2.9], "rz": 2.0},
+    {"name": "Plateau du tibia", "a": ["T", 0.0, 0, -0.2], "b": ["T", 0.06, 0, -0.2], "up": [["T", 0.03, 0, -1], ["T", 0.03, 0, 0]], "r": [3.8, 2.6], "rz": 1.4},
+    {"name": "Rotule", "a": ["T", -0.12, 0.6, 3.0], "b": ["T", -0.01, 0.6, 3.0], "up": [["T", -0.06, 0.6, 0], ["T", -0.06, 0.6, 1]], "r": [2.0, 0.9], "rz": 2.3},
     {"name": "Pied (provisoire)", "a": ["Ft", 0.3, -4.0, -2.5], "b": ["Ft", 0.6, -5.5, 13], "up": [["Ft", 0, -5, 5], ["Ft", 0, 0, 5]], "r": [3.6, 1.6], "len": 0.55}
   ],
   "fill": [
     {"a": ["F", 0.1, 2.5, -0.3], "b": ["F", 0.9, 0.5, -0.3], "ra": 5.0, "rb": 3.8},
-    {"a": ["T", 0.05, 0.8, -0.3], "b": ["T", 0.9, 0.5, -0.5], "ra": 3.0, "rb": 1.5}
+    {"a": ["T", 0.05, 0.8, -0.3], "b": ["T", 0.9, 0.5, -0.5], "ra": 2.6, "rb": 1.2},
+    {"name": "Coussinet sous la rotule, côté latéral", "a": ["T", 0.05, 1.7, 2.2], "b": ["T", 0.06, 1.7, 2.2], "ra": 1.1, "rb": 1.1},
+    {"name": "Coussinet sous la rotule, côté médial", "a": ["T", 0.05, -1.5, 2.2], "b": ["T", 0.06, -1.5, 2.2], "ra": 1.1, "rb": 1.1},
+    {"name": "Creux poplité", "a": ["T", -0.05, 0, -2.3], "b": ["T", -0.03, 0, -2.3], "ra": 1.8, "rb": 1.8}
   ],
   "fat": {
     "segments": [

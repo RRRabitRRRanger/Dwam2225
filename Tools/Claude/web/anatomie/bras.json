@@ -13,6 +13,13 @@
     {"id": "pron", "name": "Pronation, 0 = paume en avant (°)", "min": 0, "max": 160, "step": 1, "value": 70},
     {"id": "lift", "name": "Élévation du bras (°)", "min": 0, "max": 90, "step": 1, "value": 10}
   ],
+  "posePresets": [
+    {"name": "Coude plié", "values": {"flex": 100, "pron": 70, "lift": 10}},
+    {"name": "Bras levé", "values": {"flex": 20, "pron": 70, "lift": 80}},
+    {"name": "Garde", "values": {"flex": 120, "pron": 90, "lift": 30}},
+    {"name": "Paume en avant", "values": {"flex": 10, "pron": 0, "lift": 10}},
+    {"name": "Bras tendu", "values": {"flex": 0, "pron": 70, "lift": 0}}
+  ],
   "poseNote": "En pronation, le radius croise le cubitus : les muscles attachés au radius (biceps, brachio-radial, rond pronateur, extenseurs) s'enroulent autour de l'avant-bras.",
   "muscles": [
     {"name": "Deltoïde antérieur", "g": "deltoïde", "k": 1.4, "o": ["S", 0.4, 0.5, 2.7], "i": ["H", 0.46, 1.6, 0.5], "r0": 1.5, "r1": 0.6, "rb": 2.6, "at": 0.3, "c": "#d9744f"},

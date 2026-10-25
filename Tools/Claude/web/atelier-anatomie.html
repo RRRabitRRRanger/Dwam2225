@@ -18,7 +18,7 @@ body { background: var(--bg); color: var(--fg); font-family: var(--sans); font-s
 .view { position: relative; background: var(--view); border-radius: 6px; overflow: hidden; min-height: 420px; }
 canvas { display: block; width: 100%; height: 100%; touch-action: none; cursor: grab; outline: none; }
 .hud { position: absolute; left: 12px; bottom: 10px; font: 12px var(--mono); color: #cfc8bd; pointer-events: none; }
-.err { position: absolute; inset: 16px; color: #f0b0a0; font: 13px var(--mono); white-space: pre-wrap; }
+.err { position: absolute; inset: 16px; color: #f0b0a0; font: 13px var(--mono); white-space: pre-wrap; pointer-events: none; }
 .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 6px; overflow-y: auto; min-width: 0; }
 .panel section { padding: 12px 14px; border-bottom: 1px solid var(--line); display: grid; gap: 10px; }
 h1 { font-size: 18px; margin: 0; font-weight: 600; }
@@ -52,12 +52,13 @@ button:hover, button.on { border-color: var(--wood); }
     </section>
     <section>
       <h2>Pose</h2>
+      <div class="row" id="posePresets"></div>
       <div id="pose"></div>
       <p class="note" id="poseNote"></p>
     </section>
     <section>
       <h2>Vue</h2>
-      <div class="row"><button data-v="face">Face</button><button data-v="dos">Dos</button><button data-v="ext">Extérieur</button><button data-v="int">Intérieur</button><button data-v="ava">¾ avant</button><button data-v="arr">¾ arrière</button></div>
+      <div class="row"><button data-v="face">Face</button><button data-v="ava">¾ avant</button><button data-v="ext">Extérieur</button><button data-v="arr">¾ arrière</button><button data-v="dos">Dos</button><button data-v="arri">¾ arrière int.</button><button data-v="int">Intérieur</button><button data-v="avai">¾ avant int.</button></div>
       <p class="note">Flèches du clavier (après un clic dans la vue) : tourner par crans de 15°.</p>
       <div class="row">
         <label class="toggle"><input type="checkbox" id="ids"> Couleur par muscle</label>
@@ -138,7 +139,7 @@ function cutPlane() {
 const hex = h => [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16) / 255);
 const vec = h => `vec3(${hex(h).map(x => x.toFixed(3)).join(", ")})`;
 function shaderSource() {
-  const NB = D.skeleton.length, NP = D.plates.length, NF = D.fill.length, NS = D.fat.segments.length, NT = D.fat.thin.length;
+  const NB = D.skeleton.length, NP = D.plates.length, NF = D.fill.length, NS = D.fat.segments.length, NT = D.fat.thin.length, NK = D.masses.length;
   return `
 precision highp float;
 uniform vec2 uRes; uniform vec3 uEye, uTarget;
@@ -148,6 +149,7 @@ ${NP ? `uniform vec3 uPA[${NP}], uPB[${NP}], uPU[${NP}], uPR[${NP}];` : ""}
 ${NF ? `uniform vec3 uFA[${NF}], uFB[${NF}]; uniform vec2 uFR[${NF}];` : ""}
 uniform vec3 uSA[${NS}], uSB[${NS}]; uniform vec4 uSW[${NS}], uSD[${NS}];
 ${NT ? `uniform vec3 uTP[${NT}], uTR[${NT}];` : ""}
+${NK ? `uniform vec3 uKC[${NK}], uKX[${NK}], uKY[${NK}], uKR[${NK}];` : ""}
 uniform vec3 uCutP, uCutN;
 uniform float uDef, uFat, uIds, uBones, uFill, uCut, uEffort, uMode;
 const vec3 cBone = ${vec(COL.bone)}, cFill = ${vec(COL.fill)}, cFat = ${vec(COL.fat)};
@@ -184,6 +186,13 @@ float ellipsoid(vec3 p, vec3 c, vec3 ax, vec3 up, vec3 r) {
   float k0 = length(l / r), k1 = length(l / (r * r));
   return k0 * (k0 - 1.) / max(k1, 1e-4);
 }
+// Ellipsoïde orientée par deux axes (X, Y) : les masses
+float ellipsoid3(vec3 p, vec3 c, vec3 X, vec3 Y, vec3 r) {
+  vec3 q = p - c, l = vec3(dot(q, X), dot(q, Y), dot(q, cross(X, Y)));
+  float k0 = length(l / r), k1 = length(l / (r * r));
+  return k0 * (k0 - 1.) / max(k1, 1e-4);
+}
+float massField(vec3 p) { float e = 1e3; ${NK ? `for (int i = 0; i < ${NK}; i++) e = min(e, ellipsoid3(p, uKC[i], uKX[i], uKY[i], uKR[i]));` : ""} return e; }
 float bonesField(vec3 p) { float d = 1e3; for (int i = 0; i < ${NB}; i++) d = smin(d, capsule(p, uBA[i], uBB[i], uBR[i]), .5);
   ${NP ? `for (int i = 0; i < ${NP}; i++) d = smin(d, ellipsoid(p, (uPA[i] + uPB[i]) * .5, normalize(uPB[i] - uPA[i]), uPU[i], uPR[i]), .8);` : ""}
   return d; }
@@ -211,6 +220,7 @@ vec3 field(vec3 p) {
     float kInter = (uDef + .6 * uFat) * (1. - .35 * uEffort);
     ${NF ? `if (uFill > .5) { float f = 1e3; for (int i = 0; i < ${NF}; i++) f = min(f, roundCone(p, uFA[i], uFB[i], uFR[i].x, uFR[i].y));
       if (f < best) { best = f; id = -3.; } d = smin(d, f, max(kInter, .5)); }` : ""}
+    ${NK ? `{ float e = massField(p); if (e < best) { best = e; id = -4.; } d = smin(d, e, max(kInter, 1.5)); }` : ""}
     float g = 1e3, gPrev = -1.;
     for (int i = 0; i < ${NM}; i++) {
       float m = muscleG(p, uMA[i], uMV[i], uMB[i], uMR[i]).x; if (m < best) { best = m; id = float(i); }
@@ -229,10 +239,11 @@ vec4 tissue(vec3 p) {
   float db = bonesField(p), best = 1e3, ten = 0.;
   for (int i = 0; i < ${NM}; i++) { vec2 m = muscleG(p, uMA[i], uMV[i], uMB[i], uMR[i]); if (m.x < best) { best = m.x; ten = uMX[i].z > .5 ? 1. : 1. - m.y; } }
   float bone = 1. - smoothstep(.6, 3.2, db), fat = smoothstep(.15, 1.2, best) * (1. - bone);
+  ${NK ? `if (massField(p) < best) fat = 1. - bone;   // une masse de graisse affleure` : ""}
   return vec4(bone, ten * (1. - fat) * (1. - bone), fat, (1. - ten) * (1. - fat) * (1. - bone));
 }
 vec3 normal(vec3 p) { vec2 e = vec2(.02, 0); return normalize(vec3(field(p + e.xyy).x - field(p - e.xyy).x, field(p + e.yxy).x - field(p - e.yxy).x, field(p + e.yyx).x - field(p - e.yyx).x)); }
-vec3 idColor(float id) { if (id < -2.5) return cFill; if (id < -1.5) return cBone; for (int i = 0; i < ${NM}; i++) if (id < float(i) + .5) return uMC[i]; return vec3(.8); }
+vec3 idColor(float id) { if (id < -3.5) return cFat; if (id < -2.5) return cFill; if (id < -1.5) return cBone; for (int i = 0; i < ${NM}; i++) if (id < float(i) + .5) return uMC[i]; return vec3(.8); }
 void main() {
   vec2 uv = (2. * gl_FragCoord.xy - uRes) / uRes.y;
   vec3 f = normalize(uTarget - uEye), r = normalize(cross(f, vec3(0, 1, 0))), u = cross(r, f);
@@ -288,7 +299,7 @@ function compile() {
 
 // ---------- caméra : orbite libre, vues fixes, crans de 15° au clavier ----------
 let yaw = rad(45), pitch = rad(6), dist = 100, drag = null, view = null, target = [0, 0, 0];
-const VIEWS = { face: 0, dos: 180, ext: 90, int: -90, ava: 45, arr: 135 };
+const VIEWS = { face: 0, ava: 45, ext: 90, arr: 135, dos: 180, arri: -135, int: -90, avai: -45 };
 function setView(v) {
   view = v;
   if (v === "coupe") {   // la caméra regarde la tranche depuis le bas du membre
@@ -299,22 +310,29 @@ function setView(v) {
   draw();
 }
 cv.addEventListener("pointerdown", e => { drag = [e.clientX, e.clientY]; cv.setPointerCapture(e.pointerId); cv.focus(); });
-cv.addEventListener("pointermove", e => { if (!drag) return; yaw -= (e.clientX - drag[0]) * .01; pitch = Math.max(-1.5, Math.min(1.5, pitch + (e.clientY - drag[1]) * .01)); drag = [e.clientX, e.clientY]; view = null; draw(); });
+cv.addEventListener("pointermove", e => { if (!drag) return; yaw -= (e.clientX - drag[0]) * .01; pitch = Math.max(-1.5, Math.min(1.5, pitch + (e.clientY - drag[1]) * .01)); drag = [e.clientX, e.clientY]; view = null; draw(true); });
 cv.addEventListener("pointerup", () => drag = null);
-cv.addEventListener("wheel", e => { e.preventDefault(); dist = Math.max(15, Math.min(400, dist * (1 + e.deltaY * .001))); draw(); }, { passive: false });
+cv.addEventListener("wheel", e => { e.preventDefault(); dist = Math.max(15, Math.min(400, dist * (1 + e.deltaY * .001))); draw(true); }, { passive: false });
 cv.addEventListener("keydown", e => {
   const step = rad(15), snap = a => Math.round(a / step) * step;
   if (e.key === "ArrowLeft") yaw = snap(yaw) - step; else if (e.key === "ArrowRight") yaw = snap(yaw) + step;
   else if (e.key === "ArrowUp") pitch = Math.min(rad(75), snap(pitch) + step); else if (e.key === "ArrowDown") pitch = Math.max(rad(-75), snap(pitch) - step);
   else return;
-  e.preventDefault(); view = null; draw();
+  e.preventDefault(); view = null; draw(true);
 });
 
-function draw() {
+// Un seul dessin par image ; pendant qu'on tourne ou qu'on glisse un curseur, demi-résolution, puis pleine à l'arrêt.
+let pending = false, busy = false, idleTimer = 0;
+function draw(interactive) {
+  if (interactive) { busy = true; clearTimeout(idleTimer); idleTimer = setTimeout(() => { busy = false; draw(); }, 250); }
+  if (pending) return; pending = true;
+  requestAnimationFrame(() => { pending = false; render(); });
+}
+function render() {
   if (!prog) return;
   frames();
-  const w = cv.clientWidth, h = cv.clientHeight, s = Math.min(devicePixelRatio, 1.5);
-  if (cv.width !== Math.round(w * s)) { cv.width = Math.round(w * s); cv.height = Math.round(h * s); }
+  const w = cv.clientWidth, h = cv.clientHeight, s = busy ? .5 : Math.min(devicePixelRatio, 1.5);
+  if (cv.width !== Math.round(w * s) || cv.height !== Math.round(h * s)) { cv.width = Math.round(w * s); cv.height = Math.round(h * s); }
   gl.viewport(0, 0, cv.width, cv.height);
   gl.uniform2f(U("uRes"), cv.width, cv.height);
   gl.uniform3f(U("uEye"), target[0] + dist * Math.cos(pitch) * Math.sin(yaw), target[1] + dist * Math.sin(pitch), target[2] + dist * Math.cos(pitch) * Math.cos(yaw));
@@ -332,7 +350,7 @@ function draw() {
   if (D.plates.length) {
     gl.uniform3fv(U("uPA"), D.plates.flatMap(q => point(q.a))); gl.uniform3fv(U("uPB"), D.plates.flatMap(q => point(q.b)));
     gl.uniform3fv(U("uPU"), D.plates.flatMap(q => norm(sub(point(q.up[1]), point(q.up[0])))));
-    gl.uniform3fv(U("uPR"), D.plates.flatMap(q => [q.r[0], q.r[1], len(sub(point(q.b), point(q.a))) * q.len]));
+    gl.uniform3fv(U("uPR"), D.plates.flatMap(q => [q.r[0], q.r[1], q.rz || len(sub(point(q.b), point(q.a))) * q.len]));
   }
   if (D.fill.length) { gl.uniform3fv(U("uFA"), D.fill.flatMap(f => point(f.a))); gl.uniform3fv(U("uFB"), D.fill.flatMap(f => point(f.b))); gl.uniform2fv(U("uFR"), D.fill.flatMap(f => [f.ra, f.rb])); }
   const S = D.fat.segments;
@@ -340,6 +358,11 @@ function draw() {
   gl.uniform4fv(U("uSW"), S.flatMap(q => [q.w[0], q.w[1], q.ramp[0], q.ramp[1]]));
   gl.uniform4fv(U("uSD"), S.flatMap(q => q.dir ? [...norm(sub(point(q.dir.to), point(q.dir.from))), q.dir.w] : [0, 0, 0, 0]));
   if (D.fat.thin.length) { gl.uniform3fv(U("uTP"), D.fat.thin.flatMap(q => point(q.p))); gl.uniform3fv(U("uTR"), D.fat.thin.flatMap(q => [q.r[0], q.r[1], q.min])); }
+  if (D.masses.length) {
+    gl.uniform3fv(U("uKC"), D.masses.flatMap(k => point(k.c)));
+    gl.uniform3fv(U("uKX"), D.masses.flatMap(k => rotV(F[k.c[0]], [1, 0, 0]))); gl.uniform3fv(U("uKY"), D.masses.flatMap(k => rotV(F[k.c[0]], [0, 1, 0])));
+    gl.uniform3fv(U("uKR"), D.masses.flatMap(k => k.r.map(r => r + (k.fat || 0) * P.fat)));   // la masse grossit avec la graisse
+  }
   const cut = cutPlane(); gl.uniform3fv(U("uCutP"), cut.p); gl.uniform3fv(U("uCutN"), cut.n);
   gl.uniform1f(U("uDef"), P.def); gl.uniform1f(U("uFat"), P.fat); gl.uniform1f(U("uEffort"), P.effort);
   gl.uniform1f(U("uMode"), +document.getElementById("mode").value);
@@ -354,18 +377,18 @@ function sliders(box, list) {
   document.getElementById(box).innerHTML = list.map(s => `<div class="slider"><label for="${s.id}">${s.name}</label><input type="number" id="${s.id}N" step="${s.step}"><input type="range" id="${s.id}" min="${s.min}" max="${s.max}" step="${s.step}"></div>`).join("");
   list.forEach(s => {
     if (!(s.id in P)) P[s.id] = s.value;
-    document.getElementById(s.id).addEventListener("input", e => set(s.id, +e.target.value));
+    document.getElementById(s.id).addEventListener("input", e => set(s.id, +e.target.value, true));
     document.getElementById(s.id + "N").addEventListener("change", e => set(s.id, +e.target.value));
   });
 }
 function sync() { Object.keys(P).forEach(k => { const r = document.getElementById(k); if (r) { r.value = P[k]; document.getElementById(k + "N").value = P[k]; } }); }
-function set(k, v) { if (!isFinite(v)) return; P[k] = v; sync(); if (k === "cut" && view === "coupe") setView("coupe"); else draw(); }
+function set(k, v, interactive) { if (!isFinite(v)) return; P[k] = v; sync(); if (k === "cut" && view === "coupe") setView("coupe"); else draw(interactive); }
 
 async function load(part) {
   const err = document.getElementById("err"); err.textContent = "";
   try {
     D = await (await fetch(PARTS[part], { cache: "no-store" })).json();   // toujours la dernière version du membre
-    D.plates = D.plates || []; D.fill = D.fill || []; D.fat.thin = D.fat.thin || [];
+    D.plates = D.plates || []; D.fill = D.fill || []; D.fat.thin = D.fat.thin || []; D.masses = D.masses || [];
     BONE = Object.fromEntries(D.bones.map(b => [b.id, b]));
     // Groupes : les muscles d'un même groupe doivent se suivre (réunion à deux niveaux) ; tri stable par premier groupe vu
     const order = [...new Set(D.muscles.map(m => m.g))];
@@ -376,10 +399,15 @@ async function load(part) {
     Object.keys(P).forEach(k => { if (!BODY.some(b => b.id === k) && k !== "effort") delete P[k]; });
     sliders("body", BODY); sliders("pose", [...D.pose, EFFORT]); sliders("cutBox", [CUT]);
     D.pose.forEach(q => P[q.id] = q.value);
+    // Remise à zéro (la pose par défaut du fichier) et préréglages du membre
+    const presets = [{ name: "Remise à zéro", values: Object.fromEntries(D.pose.map(q => [q.id, q.value])) }, ...(D.posePresets || [])];
+    const box = document.getElementById("posePresets");
+    box.innerHTML = presets.map((q, i) => `<button data-pose="${i}">${q.name}</button>`).join("");
+    box.querySelectorAll("[data-pose]").forEach(b => b.addEventListener("click", () => { Object.assign(P, presets[+b.dataset.pose].values); sync(); draw(); }));
     frames(); D.muscles.forEach(m => m.L0 = pathLength(musclePoints(m)));
     document.getElementById("desc").textContent = D.description;
     document.getElementById("poseNote").textContent = (D.poseNote ? D.poseNote + " " : "") + "Un muscle qui raccourcit gonfle (volume conservé) ; l'effort les gonfle tous un peu plus et creuse les sillons entre groupes.";
-    document.getElementById("legend").innerHTML = [...D.muscles.map(m => [m.c, m.name]), [COL.bone, "Os"], [COL.fill, "Gabarit"], [COL.fat, "Graisse et réunion douce (coupe)"]]
+    document.getElementById("legend").innerHTML = [...D.muscles.map(m => [m.c, m.name]), [COL.bone, "Os"], [COL.fill, "Gabarit"], [COL.fat, "Graisse, masses de graisse, réunion douce (coupe)"]]
       .map(([c, n]) => `<span class="sw" style="background:${c}"></span><span>${n}</span>`).join("");
     compile(); sync(); setView("ava");
   } catch (e) { err.textContent = "Impossible de charger « " + part + " » : " + e.message; }
@@ -392,7 +420,7 @@ document.querySelectorAll("[data-v]").forEach(b => b.addEventListener("click", (
 ["ids", "bones", "fill", "cutOn", "mode"].forEach(id => document.getElementById(id).addEventListener("change", draw));
 const partSel = document.getElementById("part");
 partSel.addEventListener("change", () => { try { localStorage.setItem("atelier-part", partSel.value); } catch (e) {} load(partSel.value); });
-new ResizeObserver(draw).observe(cv);
+new ResizeObserver(() => draw()).observe(cv);
 let first = "bras"; try { first = localStorage.getItem("atelier-part") || "bras"; } catch (e) {}
 if (location.hash.slice(1) in PARTS) first = location.hash.slice(1);
 partSel.value = first; load(first);
