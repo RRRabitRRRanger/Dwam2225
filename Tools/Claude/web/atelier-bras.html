@@ -16,54 +16,62 @@ body { background: var(--bg); color: var(--fg); font-family: var(--sans); font-s
   padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 12px; }
 .app { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 14px; height: 100%; }
 .view { position: relative; background: var(--view); border-radius: 6px; overflow: hidden; min-height: 420px; }
-canvas { display: block; width: 100%; height: 100%; touch-action: none; cursor: grab; }
+canvas { display: block; width: 100%; height: 100%; touch-action: none; cursor: grab; outline: none; }
 .hud { position: absolute; left: 12px; bottom: 10px; font: 12px var(--mono); color: #cfc8bd; pointer-events: none; }
 .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 6px; overflow-y: auto; min-width: 0; }
 .panel section { padding: 12px 14px; border-bottom: 1px solid var(--line); display: grid; gap: 10px; }
 h1 { font-size: 18px; margin: 0; font-weight: 600; }
 h2 { font-size: 11px; margin: 0; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); font-weight: 600; }
 p.note { margin: 0; color: var(--muted); font-size: 13px; line-height: 1.4; }
-.slider { display: grid; grid-template-columns: 1fr 64px; align-items: center; column-gap: 8px; }
+.slider { display: grid; grid-template-columns: 1fr 72px; align-items: center; column-gap: 8px; row-gap: 2px; }
 .slider label { font-size: 13px; }
-.slider output { font: 12px var(--mono); text-align: right; color: var(--muted); font-variant-numeric: tabular-nums; }
-.slider input { grid-column: 1 / -1; width: 100%; accent-color: var(--wood); margin: 0; }
+.slider input[type=number] { font: 12px var(--mono); text-align: right; color: var(--fg); background: transparent; border: 1px solid var(--line); border-radius: 3px; padding: 2px 4px; width: 100%; box-sizing: border-box; font-variant-numeric: tabular-nums; }
+.slider input[type=range] { grid-column: 1 / -1; width: 100%; accent-color: var(--wood); margin: 0; }
 .row { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
 .toggle { display: flex; gap: 6px; align-items: center; font-size: 13px; }
 button { font: 600 13px var(--sans); border: 1px solid var(--line); background: transparent; color: var(--fg); padding: 5px 10px; border-radius: 4px; cursor: pointer; }
-button:hover { border-color: var(--wood); }
+button:hover, button.on { border-color: var(--wood); }
 .legend { display: grid; grid-template-columns: 14px 1fr; gap: 4px 8px; font-size: 13px; align-items: center; }
 .sw { width: 12px; height: 12px; border-radius: 2px; }
 @media (max-width: 800px) { .app { grid-template-columns: 1fr; height: auto; } .view { height: 60vh; } }
 </style>
 
 <div class="app">
-  <div class="view"><canvas id="c"></canvas><div class="hud">glisser : tourner · molette : zoom</div></div>
+  <div class="view"><canvas id="c" tabindex="0"></canvas><div class="hud" id="hud"></div></div>
   <div class="panel">
     <section>
       <h1>Atelier du bras</h1>
-      <p class="note">Chaque muscle est un volume rond tendu entre son origine et son insertion, qui gonfle au ventre et s'arrondit aux bouts. Il est collé à son os (pas de vide dessous) et contourne le coude par un point de passage. Le tendon du triceps est un volume épais, un peu plus bas que les chefs qui l'entourent. Le radius tourne autour du cubitus (pronation). Le bras est la réunion douce des volumes, en champ de distance.</p>
+      <p class="note">Chaque muscle est un volume rond tendu entre son origine et son insertion, qui gonfle au ventre et s'arrondit aux bouts ; ceux qui contournent le coude passent par un point de passage. Un gabarit (le tissu sous les muscles) remplit le tour des os. Le radius tourne autour du cubitus (pronation). Le bras est la réunion douce des volumes, en champ de distance.</p>
     </section>
     <section>
       <h2>Corps</h2>
-      <div class="slider"><label for="def">Définition (douceur de la réunion)</label><output id="defO"></output><input type="range" id="def" min="0.1" max="4" step="0.05" value="0.8"></div>
-      <div class="slider"><label for="fat">Graisse</label><output id="fatO"></output><input type="range" id="fat" min="0" max="2.5" step="0.05" value="0.3"></div>
-      <div class="slider"><label for="mass">Volume musculaire</label><output id="massO"></output><input type="range" id="mass" min="0.6" max="1.6" step="0.01" value="1"></div>
+      <div class="slider"><label for="def">Définition, douceur de la réunion (cm)</label><input type="number" id="defN" step="0.05"><input type="range" id="def" min="0.1" max="4" step="0.05"></div>
+      <div class="slider"><label for="fat">Graisse (cm)</label><input type="number" id="fatN" step="0.05"><input type="range" id="fat" min="0" max="2.5" step="0.05"></div>
+      <div class="slider"><label for="mass">Volume musculaire (×)</label><input type="number" id="massN" step="0.01"><input type="range" id="mass" min="0.6" max="1.6" step="0.01"></div>
       <div class="row"><button data-p="0.3,0.1,1.3">Sec et musclé</button><button data-p="1.1,0.45,1">Moyen</button><button data-p="2.4,1.7,0.95">Enrobé</button><button data-p="0.9,0.2,0.75">Mince</button></div>
     </section>
     <section>
       <h2>Pose</h2>
-      <div class="slider"><label for="flex">Flexion du coude</label><output id="flexO"></output><input type="range" id="flex" min="0" max="140" step="1" value="30"></div>
-      <div class="slider"><label for="pron">Pronation (0 = paume en avant)</label><output id="pronO"></output><input type="range" id="pron" min="0" max="160" step="1" value="70"></div>
-      <div class="slider"><label for="lift">Élévation du bras</label><output id="liftO"></output><input type="range" id="lift" min="0" max="90" step="1" value="10"></div>
+      <div class="slider"><label for="flex">Flexion du coude (°)</label><input type="number" id="flexN" step="1"><input type="range" id="flex" min="0" max="140" step="1"></div>
+      <div class="slider"><label for="pron">Pronation, 0 = paume en avant (°)</label><input type="number" id="pronN" step="1"><input type="range" id="pron" min="0" max="160" step="1"></div>
+      <div class="slider"><label for="lift">Élévation du bras (°)</label><input type="number" id="liftN" step="1"><input type="range" id="lift" min="0" max="90" step="1"></div>
       <p class="note">En pronation, le radius croise le cubitus : les muscles attachés au radius (biceps, brachio-radial, rond pronateur, extenseurs) s'enroulent autour de l'avant-bras. Un muscle qui raccourcit gonfle.</p>
     </section>
     <section>
       <h2>Vue</h2>
+      <div class="row" id="views"><button data-v="face">Face</button><button data-v="dos">Dos</button><button data-v="ext">Extérieur</button><button data-v="int">Intérieur</button><button data-v="ava">¾ avant</button><button data-v="arr">¾ arrière</button></div>
+      <p class="note">Flèches du clavier (après un clic dans la vue) : tourner par crans de 15°.</p>
       <div class="row">
         <label class="toggle"><input type="checkbox" id="ids"> Couleur par muscle</label>
         <label class="toggle"><input type="checkbox" id="bones"> Os seuls</label>
-        <label class="toggle"><input type="checkbox" id="glue" checked> Muscles collés aux os</label>
+        <label class="toggle"><input type="checkbox" id="fill" checked> Gabarit sous les muscles</label>
       </div>
+    </section>
+    <section>
+      <h2>Coupe</h2>
+      <div class="row"><label class="toggle"><input type="checkbox" id="cutOn"> Couper le bras</label><button data-v="coupe">Regarder la coupe</button></div>
+      <div class="slider"><label for="cut">Position : 0 épaule, 50 coude, 100 poignet</label><input type="number" id="cutN" step="1"><input type="range" id="cut" min="0" max="100" step="1"></div>
+      <p class="note">La tranche montre chaque muscle dans sa couleur, l'os, le gabarit, et en jaune la graisse et ce que la réunion douce ajoute entre les volumes.</p>
       <div class="legend" id="legend"></div>
     </section>
   </div>
@@ -73,15 +81,16 @@ button:hover { border-color: var(--wood); }
 // ---------- repère en cm : x = extérieur (côté pouce en supination), y = haut, z = avant ; épaule à l'origine ----------
 // Attaches : S (omoplate / clavicule, fixe), H (humérus : t le long, x, z), U (cubitus), R (radius : tourne en pronation).
 const HUMERUS = 30, FOREARM = 26;
-// Muscle (v4, retour aux volumes ronds de la v1) : origine o, point de passage v (facultatif), insertion i,
+// Muscle (volumes ronds de la v1) : origine o, point de passage v (facultatif), insertion i,
 // rayon aux bouts rt et au ventre rb (cm), position du ventre at (le long de la ligne), couleur.
 const MUSCLES = [
-  { name: "Deltoïde antérieur",  o: ["S", -2.4, 1.1, 3.6],  i: ["H", .40, 1.8, .9],   rt: 1.2, rb: 2.6, at: .3, c: "#d9744f" },
-  { name: "Deltoïde moyen",      o: ["S", 3.6, 1.7, 0],     i: ["H", .40, 2.3, 0],    rt: 1.2, rb: 2.8, at: .3, c: "#e8925f" },
-  { name: "Deltoïde postérieur", o: ["S", -1.0, 1.4, -4.6], i: ["H", .40, 1.8, -.9],  rt: 1.2, rb: 2.5, at: .3, c: "#c2604a" },
-  { name: "Coraco-brachial",     o: ["S", -1.2, -1.2, 2.6], i: ["H", .50, -1.4, .5],  rt: .5, rb: 1.1, at: .45, c: "#a86a8a" },
-  { name: "Biceps",              o: ["S", 0.4, -1.2, 2.4],  i: ["R", .12, .2, 1.0],   rt: .5, rb: 2.7, at: .55, c: "#d65a5a" },
-  { name: "Brachial",            o: ["H", .48, .2, 1.2],    i: ["U", .07, -.1, .9],   rt: .7, rb: 2.2, at: .6, c: "#b84c4c" },
+  // Deltoïdes de la v1 (préférés par l'auteur) : origines basses, sous l'acromion, qui ne dépassent pas
+  { name: "Deltoïde antérieur",  o: ["S", 0.5, 0.6, 3.2],   i: ["H", .45, 2.2, 1.0],   rt: 1.2, rb: 2.6, at: .3, c: "#d9744f" },
+  { name: "Deltoïde moyen",      o: ["S", 3.2, 0.9, 0],     i: ["H", .45, 2.6, 0],     rt: 1.2, rb: 2.8, at: .3, c: "#e8925f" },
+  { name: "Deltoïde postérieur", o: ["S", 0.5, 0.6, -3.2],  i: ["H", .45, 2.2, -1.0],  rt: 1.2, rb: 2.5, at: .3, c: "#c2604a" },
+  { name: "Coraco-brachial",     o: ["S", -1.2, -1.2, 2.6], i: ["H", .50, -1.4, .5],   rt: .5, rb: 1.1, at: .45, c: "#a86a8a" },
+  { name: "Biceps",              o: ["S", 0.4, -1.2, 2.4],  i: ["R", .12, .2, 1.0],    rt: .5, rb: 2.7, at: .55, c: "#d65a5a" },
+  { name: "Brachial",            o: ["H", .48, .2, 1.2],    i: ["U", .07, -.1, .9],    rt: .7, rb: 2.2, at: .6, c: "#b84c4c" },
   // Triceps en fer à cheval : les chefs long (médial) et latéral finissent sur les bords du tendon, pas tous au même point
   { name: "Triceps long",        o: ["S", -0.8, -2.2, -2.4],i: ["H", .74, -1.8, -1.9], rt: .6, rb: 2.6, at: .42, c: "#7a8fc9" },
   { name: "Triceps latéral",     o: ["H", .18, 1.6, -1.3],  i: ["H", .74, 1.8, -1.9],  rt: .6, rb: 2.3, at: .42, c: "#93a6dc" },
@@ -91,29 +100,33 @@ const MUSCLES = [
   { name: "Anconé",              o: ["H", .98, 2.2, -.8],   i: ["U", .18, .6, -1.2],   rt: .7, rb: 1.2, at: .45, c: "#5a6aa0" },
   // Muscles de l'avant-bras partis de l'humérus : longs fuseaux (v1), point de passage pour contourner le coude
   { name: "Brachio-radial",      o: ["H", .68, 2.5, .4],    v: ["U", .12, 2.6, .7],   i: ["R", .94, 1.5, .2],   rt: .5, rb: 2.2, at: .38, c: "#e2b04f" },
-  { name: "Long ext. radial",    o: ["H", .82, 2.9, -.1],   v: ["U", .12, 2.6, -.3],  i: ["R", .99, 1.0, -.9],  rt: .5, rb: 1.6, at: .35, c: "#d4a04a" },
-  { name: "Extenseurs des doigts",o: ["H", 1.0, 2.8, -.6],  v: ["U", .12, 2.0, -1.2], i: ["R", .99, .0, -1.4],  rt: .5, rb: 2.0, at: .33, c: "#c9a24a" },
-  { name: "Ext. ulnaire du carpe",o: ["H", 1.0, 2.6, -.8],  v: ["U", .12, .8, -1.6],  i: ["U", .98, -1.1, -.9], rt: .45, rb: 1.3, at: .35, c: "#b08a3a" },
-  { name: "Fléchisseurs",        o: ["H", 1.0, -3.1, -.2],  v: ["U", .12, -2.4, .7],  i: ["R", .99, .1, 1.2],   rt: .6, rb: 2.4, at: .33, c: "#8fbf6a" },
-  { name: "Fléch. ulnaire du carpe",o: ["H", 1.0, -3.2, -.7],v: ["U", .12, -2.5, -.6],i: ["U", .98, -1.3, .2], rt: .5, rb: 1.5, at: .35, c: "#76a85a" },
-  { name: "Rond pronateur",      o: ["H", .96, -2.9, .2],   i: ["R", .5, 1.3, .3],     rt: .5, rb: 1.4, at: .4, c: "#5f9a55" },
+  { name: "Long ext. radial",    o: ["H", .82, 2.6, -.1],   v: ["U", .12, 2.4, -.3],  i: ["R", .95, 1.1, -.7],  rt: .5, rb: 1.6, at: .35, c: "#d4a04a" },
+  { name: "Extenseurs des doigts",o: ["H", .98, 2.0, -.6],  v: ["U", .12, 1.8, -1.1], i: ["R", .95, .2, -1.0],  rt: .5, rb: 2.0, at: .33, c: "#c9a24a" },
+  { name: "Ext. ulnaire du carpe",o: ["H", .98, 1.9, -.8],  v: ["U", .12, .8, -1.5],  i: ["U", .95, -1.1, -.7], rt: .45, rb: 1.3, at: .35, c: "#b08a3a" },
+  { name: "Fléchisseurs",        o: ["H", .98, -2.4, -.2],  v: ["U", .12, -2.2, .7],  i: ["R", .95, .2, .9],    rt: .6, rb: 2.4, at: .33, c: "#8fbf6a" },
+  { name: "Fléch. ulnaire du carpe",o: ["H", .98, -2.5, -.7],v: ["U", .12, -2.3, -.6],i: ["U", .95, -1.2, .3], rt: .5, rb: 1.5, at: .35, c: "#76a85a" },
+  { name: "Rond pronateur",      o: ["H", .96, -2.3, .2],   i: ["R", .5, 1.3, .3],     rt: .5, rb: 1.4, at: .4, c: "#5f9a55" },
 ];
-// Os et repères ; les épicondyles sont reliés à l'humérus (plus de boules isolées au coude)
+// Os et repères ; épicondyles reliés à l'humérus, courts (ils ne doivent pas flotter hors du coude)
 const BONES = [
   { a: ["S", -7, 1.4, 3], b: ["S", -2.2, 1.5, 1.6], r: 1.0 },      // clavicule (amorce)
   { a: ["S", -2.2, 1.5, 1.4], b: ["S", 3.6, 1.6, -.2], r: 1.1 },   // acromion
   { a: ["S", 0, -.3, 0], b: ["S", 0, -.3, 0], r: 2.4 },            // tête de l'humérus
   { a: ["H", .05, 0, 0], b: ["H", .95, 0, 0], r: 1.2 },            // humérus
-  { a: ["H", .9, .8, -.2], b: ["H", 1, 2.5, -.3], r: .7 },         // épicondyle latéral
-  { a: ["H", .9, -.8, -.3], b: ["H", 1, -3.0, -.5], r: .85 },      // épicondyle médial (plus saillant)
+  { a: ["H", .95, .8, -.2], b: ["H", 1, 2.1, -.3], r: .65 },       // épicondyle latéral
+  { a: ["H", .95, -.8, -.3], b: ["H", 1, -2.6, -.5], r: .75 },     // épicondyle médial (plus saillant)
   { a: ["U", -.05, -.2, -1.6], b: ["U", 1, -1.3, -.3], r: .75 },   // cubitus, olécrane en arrière
   { a: ["R", .03, 1.6, .2], b: ["R", 1, 1.3, .2], r: .75 },        // radius
 ];
-// Axes des os longs, pour coller les muscles : humérus, cubitus, radius
-const AXES = [[["H", 0, 0, 0], ["H", 1, 0, 0]], [BONES[6].a, BONES[6].b], [BONES[7].a, BONES[7].b]];
+// Gabarit sous les muscles (tissu conjonctif) : deux cônes arrondis autour des os, bien à l'intérieur de la surface
+const FILL = [
+  { a: ["H", .12, 0, -.2], b: ["H", .9, 0, -.2], ra: 2.3, rb: 2.0 },
+  { a: ["U", .02, 0, -.3], b: ["U", .9, 0, 0], ra: 2.3, rb: 1.3 },
+];
 const HAND = { a: ["R", 1.03, 0, 0], b: ["R", 1.33, 0, 0] };
+const COL = { bone: "#efe9dc", fill: "#c9b3b6", fat: "#e8cf6a" };
 
-let P = { def: .8, fat: .3, mass: 1, flex: 30, pron: 70, lift: 10 };
+let P = { def: .8, fat: .3, mass: 1, flex: 30, pron: 70, lift: 10, cut: 25 };
 const rad = d => d * Math.PI / 180;
 const add = (a, b) => [a[0] + b[0], a[1] + b[1], a[2] + b[2]], sub = (a, b) => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
 const scale = (a, s) => [a[0] * s, a[1] * s, a[2] * s], dot = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
@@ -136,52 +149,55 @@ function point(spec) {
   }
   return rotZ(p, rad(P.lift));
 }
-// Les trois points d'un muscle ; sans point de passage, le milieu (la ligne reste droite)
-function musclePoints(m) { const a = point(m.o), b = point(m.i); return [a, m.v ? point(m.v) : scale(add(a, b), .5), b]; }
+// Les trois points d'un muscle. Sans point de passage, v = a : le premier morceau n'est qu'une boule de rayon rt
+// cachée dans le bout du second, donc aucune bosse au milieu (défaut de la v4 : on coupait au milieu).
+function musclePoints(m) { const a = point(m.o); return [a, m.v ? point(m.v) : a, point(m.i)]; }
 const pathLength = ([a, v, b]) => len(sub(v, a)) + len(sub(b, v));
 function restLength(m) { const s = { ...P }; P.flex = 30; P.pron = 70; P.lift = 10; const L = pathLength(musclePoints(m)); Object.assign(P, s); return L; }
 MUSCLES.forEach(m => m.L0 = restLength(m));
+// Plan de coupe : perpendiculaire à l'humérus (0 à 50) ou à l'avant-bras (50 à 100) ; la normale pointe vers la main
+function cutPlane() {
+  const s = P.cut / 100, H0 = point(["H", 0, 0, 0]), H1 = point(["H", 1, 0, 0]), U0 = point(["U", 0, 0, 0]), U1 = point(["U", 1, 0, 0]);
+  return s <= .5 ? { p: point(["H", .06 + s * 2 * .9, 0, 0]), n: norm(sub(H1, H0)) } : { p: point(["U", .02 + (s - .5) * 2 * .93, 0, 0]), n: norm(sub(U1, U0)) };
+}
 
 // ---------- WebGL ----------
 const cv = document.getElementById("c"), gl = cv.getContext("webgl");
-const NM = MUSCLES.length, NB = BONES.length;
+const NM = MUSCLES.length, NB = BONES.length, NF = FILL.length;
+const vec = h => `vec3(${hex(h).map(x => x.toFixed(3)).join(", ")})`;
+const hex = h => [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16) / 255);
 const fs = `
 precision highp float;
 uniform vec2 uRes; uniform vec3 uEye, uTarget;
 uniform vec3 uMA[${NM}], uMV[${NM}], uMB[${NM}], uMR[${NM}], uMC[${NM}];
 uniform vec3 uBA[${NB}], uBB[${NB}]; uniform float uBR[${NB}];
-uniform vec3 uXA[3], uXB[3];
-uniform vec3 uHA, uHB, uHU;
-uniform float uDef, uFat, uIds, uBones, uGlue;
+uniform vec3 uFA[${NF}], uFB[${NF}]; uniform vec2 uFR[${NF}];
+uniform vec3 uHA, uHB, uHU, uCutP, uCutN;
+uniform float uDef, uFat, uIds, uBones, uFill, uCut;
+const vec3 cBone = ${vec(COL.bone)}, cFill = ${vec(COL.fill)}, cFat = ${vec(COL.fat)};
 float smin(float a, float b, float k) { float h = clamp(.5 + .5 * (b - a) / k, 0., 1.); return mix(b, a, h) - k * h * (1. - h); }
-// Distance du ventre (centre c, rayon rr) prolongé jusqu'aux os longs (humérus, cubitus, radius). Chaque os est pénalisé
-// par son éloignement au-delà du plus proche : on colle au plus proche, sans saut quand on passe d'un os à l'autre (coude).
-float glued(vec3 p, vec3 c, float rr) {
-  vec3 q[3]; float e[3], emin = 1e3;
-  for (int i = 0; i < 3; i++) { vec3 ab = uXB[i] - uXA[i]; q[i] = uXA[i] + ab * clamp(dot(c - uXA[i], ab) / dot(ab, ab), 0., 1.);
-    e[i] = length(c - q[i]); emin = min(emin, e[i]); }
-  float d = 1e3;
-  for (int i = 0; i < 3; i++) { vec3 cg = q[i] - c; float k = clamp(dot(p - c, cg) / max(dot(cg, cg), 1e-4), 0., 1.);
-    d = min(d, length(p - c - cg * k) - rr * .7 + 2. * (e[i] - emin)); }
-  return d;
-}
-// Un morceau de muscle : le segment a → b, qui couvre [t0, t1] de la longueur totale ; rayon de rt (bouts) à rb (ventre)
-// en sinus, bouts arrondis (le segment est clampé). Collé à l'os : le ventre est prolongé jusqu'à l'os le plus proche.
+// Morceau de muscle : le segment a → b couvre [t0, t1] de la longueur ; rayon de rt (bouts) à rb (ventre) en sinus,
+// bouts arrondis (le segment est clampé). Comme la v1.
 float musclePiece(vec3 p, vec3 a, vec3 b, float t0, float t1, vec3 r) {
   vec3 ab = b - a; float s = clamp(dot(p - a, ab) / max(dot(ab, ab), 1e-4), 0., 1.);
-  vec3 c = a + ab * s; float t = mix(t0, t1, s);
-  float u = t < r.z ? t / r.z : (1. - t) / (1. - r.z);
-  float rr = r.x + (r.y - r.x) * sin(1.5707963 * clamp(u, 0., 1.));
-  float d = length(p - c) - rr;
-  if (uGlue > .5) d = min(d, glued(p, c, rr));
-  return d;
+  float t = mix(t0, t1, s), u = t < r.z ? t / r.z : (1. - t) / (1. - r.z);
+  return length(p - a - ab * s) - (r.x + (r.y - r.x) * sin(1.5707963 * clamp(u, 0., 1.)));
 }
-// Muscle : ligne brisée a → v → b (point de passage v). Les deux morceaux sont réunis en douceur : pas de saut de rayon au pli.
+// Muscle : ligne brisée a → v → b. Simple min des deux morceaux (même rayon au point de passage : pas de saut, pas de bosse).
 float muscle(vec3 p, vec3 a, vec3 v, vec3 b, vec3 r) {
   float L1 = length(v - a), L2 = length(b - v), tv = L1 / (L1 + L2);
-  return smin(musclePiece(p, a, v, 0., tv, r), musclePiece(p, v, b, tv, 1., r), .3) * .7;
+  return min(musclePiece(p, a, v, 0., tv, r), musclePiece(p, v, b, tv, 1., r)) * .8;
 }
 float capsule(vec3 p, vec3 a, vec3 b, float r) { vec3 ab = b - a; float t = clamp(dot(p - a, ab) / max(dot(ab, ab), 1e-4), 0., 1.); return length(p - (a + ab * t)) - r; }
+// Cône arrondi (Inigo Quilez) : le gabarit
+float roundCone(vec3 p, vec3 a, vec3 b, float r1, float r2) {
+  vec3 ba = b - a; float l2 = dot(ba, ba), rr = r1 - r2, a2 = l2 - rr * rr, il2 = 1. / l2;
+  vec3 pa = p - a; float y = dot(pa, ba), z = y - l2; vec3 xv = pa * l2 - ba * y;
+  float x2 = dot(xv, xv), y2 = y * y * l2, z2 = z * z * l2, k = sign(rr) * rr * rr * x2;
+  if (sign(z) * a2 * z2 > k) return sqrt(x2 + z2) * il2 - r2;
+  if (sign(y) * a2 * y2 < k) return sqrt(x2 + y2) * il2 - r1;
+  return (sqrt(x2 * a2 * il2) + y * rr) * il2 - r1;
+}
 // Main provisoire : une ellipsoïde arrondie (attachée au radius)
 float ellipsoid(vec3 p, vec3 c, vec3 ax, vec3 up, vec3 r) {
   vec3 v = normalize(up - ax * dot(up, ax)), u = cross(ax, v), q = p - c;
@@ -191,27 +207,34 @@ float ellipsoid(vec3 p, vec3 c, vec3 ax, vec3 up, vec3 r) {
 }
 float bonesField(vec3 p) { float d = 1e3; for (int i = 0; i < ${NB}; i++) d = smin(d, capsule(p, uBA[i], uBB[i], uBR[i]), .5);
   d = smin(d, ellipsoid(p, (uHA + uHB) * .5, normalize(uHB - uHA), uHU, vec3(2.1, .8, length(uHB - uHA) * .55)), .8); return d; }
-vec2 field(vec3 p) {   // x = distance, y = id du muscle le plus proche
-  float d = bonesField(p);
-  if (uBones > .5) return vec2(d, -2.);
-  float best = 1e3, id = -1.;
-  for (int i = 0; i < ${NM}; i++) { float m = muscle(p, uMA[i], uMV[i], uMB[i], uMR[i]); if (m < best) { best = m; id = float(i); } d = smin(d, m, uDef); }
-  d -= uFat;   // graisse : une couche qui épaissit et adoucit encore
-  return vec2(d, id);
+// x = distance, y = composant le plus « dedans » (n° du muscle, -2 os, -3 gabarit), z = sa distance (< 0 : on est dedans)
+vec3 field(vec3 p) {
+  float db = bonesField(p), d = db, best = db, id = -2.;
+  if (uBones < .5) {
+    if (uFill > .5) { float f = 1e3; for (int i = 0; i < ${NF}; i++) f = min(f, roundCone(p, uFA[i], uFB[i], uFR[i].x, uFR[i].y));
+      if (f < best) { best = f; id = -3.; } d = smin(d, f, max(uDef, .5)); }
+    for (int i = 0; i < ${NM}; i++) { float m = muscle(p, uMA[i], uMV[i], uMB[i], uMR[i]); if (m < best) { best = m; id = float(i); } d = smin(d, m, uDef); }
+    d -= uFat;   // graisse : une couche qui épaissit et adoucit encore
+    if (db < 0.) { best = db; id = -2.; }   // dans la coupe, l'os passe devant le gabarit qui l'entoure
+  }
+  if (uCut > .5) d = max(d, dot(p - uCutP, uCutN));
+  return vec3(d, id, best);
 }
 vec3 normal(vec3 p) { vec2 e = vec2(.02, 0); return normalize(vec3(field(p + e.xyy).x - field(p - e.xyy).x, field(p + e.yxy).x - field(p - e.yxy).x, field(p + e.yyx).x - field(p - e.yyx).x)); }
-vec3 idColor(float id) { ${MUSCLES.map((m, i) => `if (id < ${i}.5) return uMC[${i}];`).join(" ")} return vec3(.8); }
+vec3 idColor(float id) { if (id < -2.5) return cFill; if (id < -1.5) return cBone; ${MUSCLES.map((m, i) => `if (id < ${i}.5) return uMC[${i}];`).join(" ")} return vec3(.8); }
 void main() {
   vec2 uv = (2. * gl_FragCoord.xy - uRes) / uRes.y;
   vec3 f = normalize(uTarget - uEye), r = normalize(cross(f, vec3(0, 1, 0))), u = cross(r, f);
-  vec3 rd = normalize(f * 2.2 + uv.x * r + uv.y * u), p = uEye; float t = 0.; vec2 h = vec2(1e3, -1);
-  for (int i = 0; i < 160; i++) { h = field(p); if (h.x < .01 || t > 400.) break; t += h.x; p += rd * h.x; }
+  vec3 rd = normalize(f * 2.2 + uv.x * r + uv.y * u), p = uEye; float t = 0.; vec3 h = vec3(1e3, -1, 0);
+  for (int i = 0; i < 180; i++) { h = field(p); if (h.x < .01 || t > 400.) break; t += h.x; p += rd * h.x; }
   vec3 bg = mix(vec3(.10, .095, .09), vec3(.17, .16, .15), uv.y * .5 + .5);
   if (h.x > .05) { gl_FragColor = vec4(pow(bg, vec3(.4545)), 1); return; }
   vec3 n = normal(p), L = normalize(vec3(.5, .7, .6));
-  vec3 alb = uIds > .5 && h.y >= 0. ? idColor(h.y) : (h.y < -1.5 ? vec3(.85, .82, .75) : vec3(.80, .58, .47));
-  float dif = clamp(dot(n, L) * .8 + .2, 0., 1.);
-  float rim = pow(1. - clamp(dot(n, -rd), 0., 1.), 3.) * .22;
+  bool onCut = uCut > .5 && abs(dot(p - uCutP, uCutN)) < .05;
+  vec3 alb = onCut ? (h.z < 0. ? idColor(h.y) : cFat)
+           : uBones > .5 ? cBone : uIds > .5 ? idColor(h.y) : vec3(.80, .58, .47);
+  float dif = onCut ? .9 : clamp(dot(n, L) * .8 + .2, 0., 1.);
+  float rim = onCut ? 0. : pow(1. - clamp(dot(n, -rd), 0., 1.), 3.) * .22;
   float ao = clamp(field(p + n * .8).x / .8, 0., 1.);
   vec3 col = alb * (dif * vec3(1., .96, .9) + vec3(.16, .17, .2) * (.5 + .5 * ao)) + rim;
   gl_FragColor = vec4(pow(col, vec3(.4545)), 1);
@@ -222,14 +245,31 @@ const prog = gl.createProgram(); gl.attachShader(prog, sh(gl.VERTEX_SHADER, vs))
 gl.bindBuffer(gl.ARRAY_BUFFER, gl.createBuffer()); gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 3, -1, -1, 3]), gl.STATIC_DRAW);
 const aLoc = gl.getAttribLocation(prog, "a"); gl.enableVertexAttribArray(aLoc); gl.vertexAttribPointer(aLoc, 2, gl.FLOAT, false, 0, 0);
 const U = n => gl.getUniformLocation(prog, n);
-const hex = h => [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16) / 255);
 
-let yaw = 1.0, pitch = .1, dist = 100, drag = null;
-const target = [0, -26, 0];
-cv.addEventListener("pointerdown", e => { drag = [e.clientX, e.clientY]; cv.setPointerCapture(e.pointerId); });
-cv.addEventListener("pointermove", e => { if (!drag) return; yaw -= (e.clientX - drag[0]) * .01; pitch = Math.max(-1.3, Math.min(1.3, pitch + (e.clientY - drag[1]) * .01)); drag = [e.clientX, e.clientY]; draw(); });
+// ---------- caméra : orbite libre, vues fixes, crans de 15° au clavier ----------
+let yaw = rad(45), pitch = rad(6), dist = 100, drag = null, view = null;
+let target = [0, -26, 0];
+const VIEWS = { face: 0, dos: 180, ext: 90, int: -90, ava: 45, arr: 135 };
+function setView(v) {
+  view = v;
+  if (v === "coupe") {   // la caméra regarde la tranche depuis le côté de la main
+    const c = cutPlane(); target = c.p; dist = 32;
+    pitch = Math.asin(Math.max(-.995, Math.min(.995, c.n[1]))); yaw = Math.atan2(c.n[0], c.n[2]);
+  } else { target = [0, -26, 0]; dist = 100; pitch = rad(6); yaw = rad(VIEWS[v]); }
+  document.querySelectorAll("[data-v]").forEach(b => b.classList.toggle("on", b.dataset.v === v));
+  draw();
+}
+cv.addEventListener("pointerdown", e => { drag = [e.clientX, e.clientY]; cv.setPointerCapture(e.pointerId); cv.focus(); });
+cv.addEventListener("pointermove", e => { if (!drag) return; yaw -= (e.clientX - drag[0]) * .01; pitch = Math.max(-1.5, Math.min(1.5, pitch + (e.clientY - drag[1]) * .01)); drag = [e.clientX, e.clientY]; view = null; draw(); });
 cv.addEventListener("pointerup", () => drag = null);
-cv.addEventListener("wheel", e => { e.preventDefault(); dist = Math.max(25, Math.min(220, dist * (1 + e.deltaY * .001))); draw(); }, { passive: false });
+cv.addEventListener("wheel", e => { e.preventDefault(); dist = Math.max(20, Math.min(220, dist * (1 + e.deltaY * .001))); draw(); }, { passive: false });
+cv.addEventListener("keydown", e => {
+  const step = rad(15), snap = a => Math.round(a / step) * step;
+  if (e.key === "ArrowLeft") yaw = snap(yaw) - step; else if (e.key === "ArrowRight") yaw = snap(yaw) + step;
+  else if (e.key === "ArrowUp") pitch = Math.min(rad(75), snap(pitch) + step); else if (e.key === "ArrowDown") pitch = Math.max(rad(-75), snap(pitch) - step);
+  else return;
+  e.preventDefault(); view = null; draw();
+});
 
 function draw() {
   const w = cv.clientWidth, h = cv.clientHeight, s = Math.min(devicePixelRatio, 1.5);
@@ -248,20 +288,33 @@ function draw() {
   const BA = [], BB = [], BR = [];
   BONES.forEach(b => { BA.push(...point(b.a)); BB.push(...point(b.b)); BR.push(b.r); });
   gl.uniform3fv(U("uBA"), BA); gl.uniform3fv(U("uBB"), BB); gl.uniform1fv(U("uBR"), BR);
-  gl.uniform3fv(U("uXA"), AXES.flatMap(x => point(x[0]))); gl.uniform3fv(U("uXB"), AXES.flatMap(x => point(x[1])));
+  gl.uniform3fv(U("uFA"), FILL.flatMap(f => point(f.a))); gl.uniform3fv(U("uFB"), FILL.flatMap(f => point(f.b))); gl.uniform2fv(U("uFR"), FILL.flatMap(f => [f.ra, f.rb]));
   const ha = point(HAND.a), hb = point(HAND.b), palmUp = norm(sub(point(["R", 1.1, 0, 1]), point(["R", 1.1, 0, 0])));
   gl.uniform3fv(U("uHA"), ha); gl.uniform3fv(U("uHB"), hb); gl.uniform3fv(U("uHU"), palmUp);
+  const cut = cutPlane(); gl.uniform3fv(U("uCutP"), cut.p); gl.uniform3fv(U("uCutN"), cut.n);
   gl.uniform1f(U("uDef"), P.def); gl.uniform1f(U("uFat"), P.fat);
-  ["ids", "bones", "glue"].forEach(id => gl.uniform1f(U("u" + id[0].toUpperCase() + id.slice(1)), document.getElementById(id).checked ? 1 : 0));
+  [["ids", "uIds"], ["bones", "uBones"], ["fill", "uFill"], ["cutOn", "uCut"]].forEach(([id, u]) => gl.uniform1f(U(u), document.getElementById(id).checked ? 1 : 0));
   gl.drawArrays(gl.TRIANGLES, 0, 3);
+  const deg = a => Math.round(((a * 180 / Math.PI) % 360 + 540) % 360 - 180);
+  document.getElementById("hud").textContent = `glisser : tourner · molette : zoom · lacet ${deg(yaw)}° · tangage ${deg(pitch)}°`;
 }
 
-const fmt = { def: v => v.toFixed(2) + " cm", fat: v => v.toFixed(2) + " cm", mass: v => "× " + v.toFixed(2), flex: v => v + "°", pron: v => v + "°", lift: v => v + "°" };
-function sync() { Object.keys(P).forEach(k => { const i = document.getElementById(k); i.value = P[k]; document.getElementById(k + "O").textContent = fmt[k](P[k]); }); }
-Object.keys(P).forEach(k => document.getElementById(k).addEventListener("input", e => { P[k] = +e.target.value; sync(); draw(); }));
+// ---------- réglages : curseur et saisie au clavier liés ----------
+const keys = Object.keys(P);
+function sync() { keys.forEach(k => { document.getElementById(k).value = P[k]; document.getElementById(k + "N").value = P[k]; }); }
+function set(k, v) { if (!isFinite(v)) return; P[k] = v; sync(); if (k === "cut" && view === "coupe") setView("coupe"); else draw(); }
+keys.forEach(k => {
+  document.getElementById(k).addEventListener("input", e => set(k, +e.target.value));
+  document.getElementById(k + "N").addEventListener("change", e => set(k, +e.target.value));
+});
 document.querySelectorAll("[data-p]").forEach(b => b.addEventListener("click", () => { const [d, f, m] = b.dataset.p.split(",").map(Number); P.def = d; P.fat = f; P.mass = m; sync(); draw(); }));
-["ids", "bones", "glue"].forEach(id => document.getElementById(id).addEventListener("change", draw));
-document.getElementById("legend").innerHTML = MUSCLES.map(m => `<span class="sw" style="background:${m.c}"></span><span>${m.name}</span>`).join("");
+document.querySelectorAll("[data-v]").forEach(b => b.addEventListener("click", () => {
+  if (b.dataset.v === "coupe") document.getElementById("cutOn").checked = true;
+  setView(b.dataset.v);
+}));
+["ids", "bones", "fill", "cutOn"].forEach(id => document.getElementById(id).addEventListener("change", draw));
+document.getElementById("legend").innerHTML = [...MUSCLES.map(m => [m.c, m.name]), [COL.bone, "Os"], [COL.fill, "Gabarit"], [COL.fat, "Graisse et réunion douce (coupe)"]]
+  .map(([c, n]) => `<span class="sw" style="background:${c}"></span><span>${n}</span>`).join("");
 new ResizeObserver(draw).observe(cv);
-sync(); draw();
+sync(); setView("ava");
 </script>
