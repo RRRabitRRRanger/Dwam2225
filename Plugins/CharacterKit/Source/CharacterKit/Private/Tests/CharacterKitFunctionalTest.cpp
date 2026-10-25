@@ -681,21 +681,31 @@ bool FCharacterKitTwoSpheresTest::RunTest(const FString& Parameters)
 		{ TEXT("pres"), FVector(-40, 330, 230), FVector(-20, 0, 150), 40.f },
 		{ TEXT("dessus"), FVector(-20, 1, 900), FVector(-20, 0, 150), 45.f },
 	};
-	struct FMethod { const TCHAR* Tag; float Mode; float R1; };
+	// À réglages égaux (demande de l'auteur) : la même hauteur de sonde D pour toutes les méthodes, à 10 puis 25 cm.
+	//  - Auteur (MF_Light2) : sondes D, D+1, D+2 → AO, puis lerp(gradient à la surface, normale du mesh, AO)
+	//  - Champ : une sonde à D
+	//  - Hybride : sondes D et D+2, sans part de base
+	struct FMethod { const TCHAR* Tag; float Mode; };
 	const FMethod Methods[] =
 	{
-		{ TEXT("1origine"), 1.f, 5.f },
-		{ TEXT("2hybride"), 0.f, 5.f },   // deux sondes 5 / 40 cm, part de base 0,3
-		{ TEXT("3surface"), 3.f, 5.f },   // gradient du GDF à la surface, alpha 0,5
-		{ TEXT("4champ"), 6.f, 15.f },    // une sonde à 15 cm
+		{ TEXT("1origine"), 1.f },
+		{ TEXT("2auteur"), 3.f },
+		{ TEXT("3champ"), 6.f },
+		{ TEXT("4hybride"), 0.f },
 	};
-	for (const FView& V : Views)
+	MID->SetScalarParameterValue(TEXT("BaseBlend"), 0.f);
+	for (float D : { 10.f, 25.f })
 	{
-		for (const FMethod& M : Methods)
+		MID->SetScalarParameterValue(TEXT("AuthorDist"), D);
+		MID->SetScalarParameterValue(TEXT("R1"), D);
+		MID->SetScalarParameterValue(TEXT("R2"), D + 2.f);
+		for (const FView& V : Views)
 		{
-			MID->SetScalarParameterValue(TEXT("Mode"), M.Mode);
-			MID->SetScalarParameterValue(TEXT("R1"), M.R1);
-			Capture(TW.World, V.Eye, V.Target, FString::Printf(TEXT("Methode_%s_%s.png"), V.Tag, M.Tag), 640, 480, V.Fov, Raw);
+			for (const FMethod& M : Methods)
+			{
+				MID->SetScalarParameterValue(TEXT("Mode"), M.Mode);
+				Capture(TW.World, V.Eye, V.Target, FString::Printf(TEXT("Egal_D%d_%s_%s.png"), FMath::RoundToInt(D), V.Tag, M.Tag), 640, 480, V.Fov, Raw);
+			}
 		}
 	}
 	MID->SetScalarParameterValue(TEXT("R1"), 25.f);

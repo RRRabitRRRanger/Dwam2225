@@ -71,13 +71,24 @@ def probe(radius, y):
 d1, g1 = probe(r1, 0)
 d2, g2 = probe(r2, 300)
 g0 = node(unreal.MaterialExpressionDistanceFieldGradient, -750, 600)
+# Méthode de l'auteur (MF_Light2) : trois sondes à AuthorDist, +1, +2 cm (10 / 11 / 12 par défaut)
+adist = scalar("AuthorDist", 10.0, -1400, 1240)
+add1 = node(unreal.MaterialExpressionAdd, -1250, 1300)
+link(adist, "", add1, "A")
+add1.set_editor_property("const_b", 1.0)
+add2 = node(unreal.MaterialExpressionAdd, -1250, 1400)
+link(adist, "", add2, "A")
+add2.set_editor_property("const_b", 2.0)
+da0, _ = probe(adist, 900)
+da1, _ = probe(add1, 1200)
+da2, _ = probe(add2, 1500)
 link(wp, "", g0, "Position")
 
 custom = node(unreal.MaterialExpressionCustom, -400, 300)
 custom.set_editor_property("output_type", unreal.CustomMaterialOutputType.CMOT_FLOAT3)
 custom.set_editor_property("description", "ClaudeJointBlendDebug")
 custom.set_editor_property("include_file_paths", ["/Plugin/DwamLighting/NormalTransfer.ush", "/Plugin/DwamLighting/Patterns.ush"])
-names = ["N", "R1", "D1", "G1", "R2", "D2", "G2", "G0", "BaseBlend", "SurfaceAlpha", "Mode", "WP", "SunDir", "Cell"]
+names = ["N", "R1", "D1", "G1", "R2", "D2", "G2", "G0", "BaseBlend", "SurfaceAlpha", "Mode", "WP", "SunDir", "Cell", "AD", "DA0", "DA1", "DA2"]
 inputs = []
 for n in names:
     ci = unreal.CustomInput()
@@ -88,7 +99,9 @@ custom.set_editor_property("code", """
 float3 Nn = normalize(N);
 float Mask;
 float3 Hyb = DwamNormalTransferHybrid(Nn, R1, D1, G1, R2, D2, G2, BaseBlend, 1.0, 0.5, float3(0, 0, 1), 0.8, Mask);
-float3 Surf = DwamNormalTransferSurface(Nn, G0, SurfaceAlpha);
+// Méthode de l'auteur, fidèle à MF_Light2 : lerp(gradient à la surface, normale du mesh, AO_Great)
+float AOGreat = smoothstep(0.0, 1.0, (DA0 / AD) * lerp(0.25, 1.0, saturate(DA1 / (AD + 1.0))) * lerp(0.25, 1.0, saturate(DA2 / (AD + 2.0))));
+float3 Surf = normalize(lerp(DwamSafeNormalize(G0, Nn), Nn, AOGreat));
 float FieldMask;
 float3 Fld = DwamNormalTransferField(Nn, R1, D1, G1, 0.5, 1.0, FieldMask);
 float3 NS = Mode < 0.5 ? Hyb : (Mode < 1.5 ? Nn : (Mode < 2.5 ? Hyb : (Mode < 3.5 ? Surf : (Mode > 5.5 ? Fld : Nn))));
@@ -121,7 +134,7 @@ if (Mode > 4.5 && Mode < 5.5)
 }
 return C;
 """)
-for n, src in zip(names, [vn, r1, d1, g1, r2, d2, g2, g0, base, alpha, mode, wp, sun, cell]):
+for n, src in zip(names, [vn, r1, d1, g1, r2, d2, g2, g0, base, alpha, mode, wp, sun, cell, adist, da0, da1, da2]):
     link(src, "", custom, n)
 
 MEL.connect_material_property(custom, "", unreal.MaterialProperty.MP_EMISSIVE_COLOR)
