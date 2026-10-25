@@ -1085,3 +1085,62 @@ bool FCharacterKitBodyJointsTest::RunTest(const FString& Parameters)
 }
 
 #endif
+
+#if WITH_DEV_AUTOMATION_TESTS
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FCharacterKitExportSkeletonTest, "CharacterKit.Export.Skeleton",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FCharacterKitExportSkeletonTest::RunTest(const FString& Parameters)
+{
+	using namespace CharacterKitTestPrivate;
+
+	// Squelette du mannequin en pose de référence (repère du composant) + pièces et ancres par défaut + profils,
+	// pour les prototypes web (artefacts) : mêmes données que dans Unreal
+	USkeletalMesh* Mesh = LoadObject<USkeletalMesh>(nullptr, MannequinPath);
+	if (!TestNotNull(TEXT("Mannequin chargé"), Mesh))
+	{
+		return false;
+	}
+	const FReferenceSkeleton& Ref = Mesh->GetRefSkeleton();
+	TArray<FTransform> CS;
+	CS.SetNum(Ref.GetRawBoneNum());
+	FString J = TEXT("{\n\"bones\": [\n");
+	for (int32 i = 0; i < Ref.GetRawBoneNum(); ++i)
+	{
+		const int32 Parent = Ref.GetParentIndex(i);
+		CS[i] = Parent == INDEX_NONE ? Ref.GetRefBonePose()[i] : Ref.GetRefBonePose()[i] * CS[Parent];
+		const FVector P = CS[i].GetLocation();
+		const FQuat Q = CS[i].GetRotation();
+		J += FString::Printf(TEXT("  {\"name\": \"%s\", \"parent\": %d, \"pos\": [%.3f, %.3f, %.3f], \"rot\": [%.5f, %.5f, %.5f, %.5f]}%s\n"),
+			*Ref.GetBoneName(i).ToString(), Parent, P.X, P.Y, P.Z, Q.X, Q.Y, Q.Z, Q.W, i + 1 < Ref.GetRawBoneNum() ? TEXT(",") : TEXT(""));
+	}
+	const FCharacterDescription D = UCharacterKitLibrary::MakeProxyDescription(Mesh);
+	J += TEXT("],\n\"parts\": [\n");
+	for (int32 i = 0; i < D.Parts.Num(); ++i)
+	{
+		const FCharacterPart& Pt = D.Parts[i];
+		const FVector L = Pt.Offset.GetLocation(), S = Pt.Offset.GetScale3D() * 100.0;
+		const FQuat Q = Pt.Offset.GetRotation();
+		J += FString::Printf(TEXT("  {\"slot\": \"%s\", \"bone\": \"%s\", \"shape\": \"%s\", \"loc\": [%.3f, %.3f, %.3f], \"rot\": [%.5f, %.5f, %.5f, %.5f], \"size\": [%.3f, %.3f, %.3f], \"ignoreLength\": %s}%s\n"),
+			*Pt.Slot.ToString(), *Pt.Bone.ToString(), Pt.Mesh ? *Pt.Mesh->GetName() : TEXT(""), L.X, L.Y, L.Z, Q.X, Q.Y, Q.Z, Q.W, S.X, S.Y, S.Z,
+			Pt.bIgnoreLength ? TEXT("true") : TEXT("false"), i + 1 < D.Parts.Num() ? TEXT(",") : TEXT(""));
+	}
+	J += TEXT("],\n\"anchors\": [\n");
+	for (int32 i = 0; i < D.Anchors.Num(); ++i)
+	{
+		const FCharacterAnchor& A = D.Anchors[i];
+		const FVector L = A.Offset.GetLocation();
+		const FQuat Q = A.Offset.GetRotation();
+		J += FString::Printf(TEXT("  {\"name\": \"%s\", \"bone\": \"%s\", \"loc\": [%.3f, %.3f, %.3f], \"rot\": [%.5f, %.5f, %.5f, %.5f], \"globeRadius\": %.3f, \"mirror\": %s}%s\n"),
+			*A.Name.ToString(), *A.Bone.ToString(), L.X, L.Y, L.Z, Q.X, Q.Y, Q.Z, Q.W, A.GlobeRadius, A.bMirror ? TEXT("true") : TEXT("false"),
+			i + 1 < D.Anchors.Num() ? TEXT(",") : TEXT(""));
+	}
+	J += TEXT("]\n}\n");
+	const FString Path = FPaths::ProjectSavedDir() / TEXT("Automation/CharacterKit_Skeleton.json");
+	TestTrue(TEXT("Fichier écrit"), FFileHelper::SaveStringToFile(J, *Path, FFileHelper::EEncodingOptions::ForceUTF8WithoutBOM));
+	AddInfo(FString::Printf(TEXT("%d os -> %s"), Ref.GetRawBoneNum(), *FPaths::ConvertRelativePathToFull(Path)));
+	return true;
+}
+
+#endif
