@@ -29,6 +29,7 @@ p.note { margin: 0; color: var(--muted); font-size: 13px; line-height: 1.4; }
 .slider input[type=range] { grid-column: 1 / -1; width: 100%; accent-color: var(--wood); margin: 0; }
 .row { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
 .toggle { display: flex; gap: 6px; align-items: center; font-size: 13px; }
+select { font: 13px var(--sans); color: var(--fg); background: var(--panel); border: 1px solid var(--line); border-radius: 4px; padding: 3px 6px; }
 button { font: 600 13px var(--sans); border: 1px solid var(--line); background: transparent; color: var(--fg); padding: 5px 10px; border-radius: 4px; cursor: pointer; }
 button:hover, button.on { border-color: var(--wood); }
 .legend { display: grid; grid-template-columns: 14px 1fr; gap: 4px 8px; font-size: 13px; align-items: center; }
@@ -67,6 +68,7 @@ button:hover, button.on { border-color: var(--wood); }
         <label class="toggle"><input type="checkbox" id="bones"> Os seuls</label>
         <label class="toggle"><input type="checkbox" id="fill" checked> Gabarit sous les muscles</label>
       </div>
+      <div class="row"><label class="toggle" for="mode">Rendu</label><select id="mode"><option value="0">Peau unie</option><option value="1" selected>Peau colorée selon les tissus</option><option value="2">Écorché (tissus)</option></select></div>
     </section>
     <section>
       <h2>Coupe</h2>
@@ -86,10 +88,13 @@ const HUMERUS = 30, FOREARM = 26;
 // origine o, point de passage v (facultatif), insertion i, rayon à l'origine r0, à l'insertion r1, au ventre rb (cm),
 // position du ventre at (le long de la ligne), couleur. peak : le pic de volume monte avec l'effort ; tendon : ne gonfle pas.
 const MUSCLES = [
-  // Deltoïde : trois faisceaux d'un même groupe (une coiffe en haut, le V en bas), origine fine mais ronde sous l'acromion
-  { name: "Deltoïde antérieur",  g: 0, k: 1.2, o: ["S", 0.5, 0.6, 3.2],   i: ["H", .45, 2.2, 1.0],   r0: .55, r1: .9, rb: 2.6, at: .3, c: "#d9744f" },
-  { name: "Deltoïde moyen",      g: 0, k: 1.2, o: ["S", 3.2, 0.9, 0],     i: ["H", .45, 2.6, 0],     r0: .55, r1: .9, rb: 2.8, at: .3, c: "#e8925f" },
-  { name: "Deltoïde postérieur", g: 0, k: 1.2, o: ["S", 0.5, 0.6, -3.2],  i: ["H", .45, 2.2, -1.0],  r0: .55, r1: .9, rb: 2.5, at: .3, c: "#c2604a" },
+  // Deltoïde : une coiffe. Large en haut (le rayon d'origine englobe le bord de l'acromion, pas de bille au sommet),
+  // fin en bas et enfoncé vers l'axe de l'humérus (la pointe du V plonge sous le biceps et le brachial) ;
+  // une crête d'attache suit l'arc clavicule → acromion → épine et bouche les creux entre les faisceaux.
+  { name: "Deltoïde antérieur",  g: 0, k: 1.4, o: ["S", 0.4, 0.5, 2.7],   i: ["H", .46, 1.6, .5],    r0: 1.5, r1: .6, rb: 2.6, at: .3, c: "#d9744f" },
+  { name: "Deltoïde moyen",      g: 0, k: 1.4, o: ["S", 2.7, 0.7, 0],     i: ["H", .46, 1.8, 0],     r0: 1.5, r1: .6, rb: 2.8, at: .3, c: "#e8925f" },
+  { name: "Deltoïde postérieur", g: 0, k: 1.4, o: ["S", 0.4, 0.5, -2.7],  i: ["H", .46, 1.6, -.5],   r0: 1.5, r1: .6, rb: 2.5, at: .3, c: "#c2604a" },
+  { name: "Crête du deltoïde",   g: 0, k: 1.4, tendon: true, o: ["S", -1.2, 0.8, 2.9], v: ["S", 2.8, 1.0, 0], i: ["S", -0.4, 0.8, -3.4], r0: 1.0, r1: 1.0, rb: 1.1, at: .5, c: "#d98a6a" },
   { name: "Coraco-brachial",     g: 1, o: ["S", -1.2, -1.2, 2.6], i: ["H", .50, -1.4, .5],   r0: .5, r1: .5, rb: 1.1, at: .45, c: "#a86a8a" },
   { name: "Biceps",              g: 2, peak: true, o: ["S", 0.4, -1.2, 2.4], i: ["R", .12, .2, 1.0], r0: .5, r1: .5, rb: 2.7, at: .55, c: "#d65a5a" },
   { name: "Brachial",            g: 3, peak: true, o: ["H", .48, .2, 1.2], i: ["U", .07, -.1, .9], r0: .7, r1: .7, rb: 2.2, at: .6, c: "#b84c4c" },
@@ -104,11 +109,11 @@ const MUSCLES = [
   // attaches extrêmes un peu enfoncées vers l'os (elles plongent dans le gabarit)
   { name: "Brachio-radial",      g: 6, o: ["H", .68, 2.3, .4],    v: ["U", .12, 2.6, .7],   i: ["R", .94, 1.5, .2],   r0: .5, r1: .5, rb: 2.2, at: .38, c: "#e2b04f" },
   { name: "Long ext. radial",    g: 7, o: ["H", .82, 2.4, -.1],   v: ["U", .12, 2.4, -.3],  i: ["R", .95, 1.1, -.6],  r0: .5, r1: .5, rb: 1.6, at: .35, c: "#d4a04a" },
-  { name: "Extenseurs des doigts",g: 7, o: ["H", .98, 1.9, -.6],  v: ["U", .12, 1.8, -1.1], i: ["R", .95, .2, -.85], r0: .5, r1: .5, rb: 2.0, at: .33, c: "#c9a24a" },
-  { name: "Ext. ulnaire du carpe",g: 7, o: ["H", .98, 1.8, -.8],  v: ["U", .12, .8, -1.5],  i: ["U", .95, -1.1, -.6], r0: .45, r1: .45, rb: 1.3, at: .35, c: "#b08a3a" },
-  { name: "Fléchisseurs",        g: 8, o: ["H", .98, -2.2, -.2],  v: ["U", .12, -2.2, .7],  i: ["R", .95, .2, .75],   r0: .6, r1: .6, rb: 2.4, at: .33, c: "#8fbf6a" },
-  { name: "Fléch. ulnaire du carpe",g: 8, o: ["H", .98, -2.3, -.7],v: ["U", .12, -2.3, -.6],i: ["U", .95, -1.1, .25], r0: .5, r1: .5, rb: 1.5, at: .35, c: "#76a85a" },
-  { name: "Rond pronateur",      g: 8, o: ["H", .96, -2.1, .2],   i: ["R", .5, 1.3, .3],     r0: .5, r1: .5, rb: 1.4, at: .4, c: "#5f9a55" },
+  { name: "Extenseurs des doigts",g: 7, o: ["H", .99, 2.1, -.4],  v: ["U", .12, 1.8, -1.1], i: ["R", .95, .2, -.85], r0: .8, r1: .5, rb: 2.0, at: .33, c: "#c9a24a" },
+  { name: "Ext. ulnaire du carpe",g: 7, o: ["H", .99, 2.0, -.7],  v: ["U", .12, .8, -1.5],  i: ["U", .95, -1.1, -.6], r0: .6, r1: .45, rb: 1.3, at: .35, c: "#b08a3a" },
+  { name: "Fléchisseurs",        g: 8, o: ["H", .99, -2.5, -.4],  v: ["U", .12, -2.2, .7],  i: ["R", .95, .2, .75],   r0: .95, r1: .6, rb: 2.4, at: .33, c: "#8fbf6a" },
+  { name: "Fléch. ulnaire du carpe",g: 8, o: ["H", .99, -2.5, -.7],v: ["U", .12, -2.3, -.6],i: ["U", .95, -1.1, .25], r0: .8, r1: .5, rb: 1.5, at: .35, c: "#76a85a" },
+  { name: "Rond pronateur",      g: 8, o: ["H", .97, -2.3, .1],   i: ["R", .5, 1.3, .3],     r0: .7, r1: .5, rb: 1.4, at: .4, c: "#5f9a55" },
 ];
 // Os et repères ; épicondyles reliés à l'humérus, courts (ils ne doivent pas flotter hors du coude)
 const BONES = [
@@ -174,27 +179,32 @@ const hex = h => [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16) / 255);
 const fs = `
 precision highp float;
 uniform vec2 uRes; uniform vec3 uEye, uTarget;
-uniform vec3 uMA[${NM}], uMV[${NM}], uMB[${NM}], uMC[${NM}]; uniform vec4 uMR[${NM}]; uniform float uMG[${NM}], uMK[${NM}];
+uniform vec3 uMA[${NM}], uMV[${NM}], uMB[${NM}], uMC[${NM}]; uniform vec4 uMR[${NM}]; uniform float uMG[${NM}], uMK[${NM}], uMT[${NM}];
 uniform vec3 uXA[2], uXB[2], uOle, uBackIn;
 uniform vec3 uBA[${NB}], uBB[${NB}]; uniform float uBR[${NB}];
 uniform vec3 uFA[${NF}], uFB[${NF}]; uniform vec2 uFR[${NF}];
 uniform vec3 uHA, uHB, uHU, uCutP, uCutN;
-uniform float uDef, uFat, uIds, uBones, uFill, uCut, uEffort;
+uniform float uDef, uFat, uIds, uBones, uFill, uCut, uEffort, uMode;
 const vec3 cBone = ${vec(COL.bone)}, cFill = ${vec(COL.fill)}, cFat = ${vec(COL.fat)};
 float smin(float a, float b, float k) { float h = clamp(.5 + .5 * (b - a) / k, 0., 1.); return mix(b, a, h) - k * h * (1. - h); }
 // Morceau de muscle : le segment a → b couvre [t0, t1] de la longueur ; rayon r0 (origine) → rb (ventre) → r1 (insertion)
 // en sinus, bouts arrondis (le segment est clampé). Comme la v1. r = (r0, r1, rb, at).
-float musclePiece(vec3 p, vec3 a, vec3 b, float t0, float t1, vec4 r) {
+// Renvoie (distance, g) : g = 1 au ventre, 0 aux bouts (là où le muscle devient tendon).
+vec2 musclePiece(vec3 p, vec3 a, vec3 b, float t0, float t1, vec4 r) {
   vec3 ab = b - a; float s = clamp(dot(p - a, ab) / max(dot(ab, ab), 1e-4), 0., 1.);
   float t = mix(t0, t1, s);
-  float rr = t < r.w ? mix(r.x, r.z, sin(1.5707963 * clamp(t / r.w, 0., 1.))) : mix(r.y, r.z, sin(1.5707963 * clamp((1. - t) / (1. - r.w), 0., 1.)));
-  return length(p - a - ab * s) - rr;
+  float g = t < r.w ? sin(1.5707963 * clamp(t / r.w, 0., 1.)) : sin(1.5707963 * clamp((1. - t) / (1. - r.w), 0., 1.));
+  return vec2(length(p - a - ab * s) - (t < r.w ? mix(r.x, r.z, g) : mix(r.y, r.z, g)), g);
 }
 // Muscle : ligne brisée a → v → b. Simple min des deux morceaux (même rayon au point de passage : pas de saut, pas de bosse).
-float muscle(vec3 p, vec3 a, vec3 v, vec3 b, vec4 r) {
+// Avec un vrai point de passage, les deux morceaux sont réunis en douceur (k = 0,5 cm) : pas de pli au coude.
+// Sans point de passage (v = a), le premier morceau n'est qu'une boule cachée dans le bout : simple min, pas de bosse.
+vec2 muscleG(vec3 p, vec3 a, vec3 v, vec3 b, vec4 r) {
   float L1 = length(v - a), L2 = length(b - v), tv = L1 / (L1 + L2);
-  return min(musclePiece(p, a, v, 0., tv, r), musclePiece(p, v, b, tv, 1., r)) * .8;
+  vec2 m1 = musclePiece(p, a, v, 0., tv, r), m2 = musclePiece(p, v, b, tv, 1., r);
+  return vec2((L1 > .01 ? smin(m1.x, m2.x, .5) : min(m1.x, m2.x)) * .8, m1.x < m2.x ? m1.y : m2.y);
 }
+float muscle(vec3 p, vec3 a, vec3 v, vec3 b, vec4 r) { return muscleG(p, a, v, b, r).x; }
 float capsule(vec3 p, vec3 a, vec3 b, float r) { vec3 ab = b - a; float t = clamp(dot(p - a, ab) / max(dot(ab, ab), 1e-4), 0., 1.); return length(p - (a + ab * t)) - r; }
 // Cône arrondi (Inigo Quilez) : le gabarit
 float roundCone(vec3 p, vec3 a, vec3 b, float r1, float r2) {
@@ -247,6 +257,13 @@ vec3 field(vec3 p) {
   if (uCut > .5) d = max(d, dot(p - uCutP, uCutN));
   return vec3(d, id, best);
 }
+// Ce qu'il y a sous la peau en p : (os affleurant, tendon, graisse, ventre de muscle), chacun entre 0 et 1.
+vec4 tissue(vec3 p) {
+  float db = bonesField(p), best = 1e3, ten = 0.;
+  for (int i = 0; i < ${NM}; i++) { vec2 m = muscleG(p, uMA[i], uMV[i], uMB[i], uMR[i]); if (m.x < best) { best = m.x; ten = uMT[i] > .5 ? 1. : 1. - m.y; } }
+  float bone = 1. - smoothstep(.6, 3.2, db), fat = smoothstep(.15, 1.2, best) * (1. - bone);
+  return vec4(bone, ten * (1. - fat) * (1. - bone), fat, (1. - ten) * (1. - fat) * (1. - bone));
+}
 vec3 normal(vec3 p) { vec2 e = vec2(.02, 0); return normalize(vec3(field(p + e.xyy).x - field(p - e.xyy).x, field(p + e.yxy).x - field(p - e.yxy).x, field(p + e.yyx).x - field(p - e.yyx).x)); }
 vec3 idColor(float id) { if (id < -2.5) return cFill; if (id < -1.5) return cBone; ${MUSCLES.map((m, i) => `if (id < ${i}.5) return uMC[${i}];`).join(" ")} return vec3(.8); }
 void main() {
@@ -258,12 +275,34 @@ void main() {
   if (h.x > .05) { gl_FragColor = vec4(pow(bg, vec3(.4545)), 1); return; }
   vec3 n = normal(p), L = normalize(vec3(.5, .7, .6));
   bool onCut = uCut > .5 && abs(dot(p - uCutP, uCutN)) < .05;
-  vec3 alb = onCut ? (h.z < 0. ? idColor(h.y) : cFat)
-           : uBones > .5 ? cBone : uIds > .5 ? idColor(h.y) : vec3(.80, .58, .47);
-  float dif = onCut ? .9 : clamp(dot(n, L) * .8 + .2, 0., 1.);
+  vec3 alb = vec3(.80, .58, .47); float rough = .5;
+  if (onCut) alb = h.z < 0. ? idColor(h.y) : cFat;
+  else if (uBones > .5) { alb = cBone; rough = .7; }
+  else if (uIds > .5) alb = idColor(h.y);
+  else if (uMode > .5) {
+    // Couleur et rugosité selon le tissu dessous (sans texture) : saillies osseuses rosées et mates (références de l'auteur :
+    // coude, poignet, épaule), tendons sous peau fine plus froids, graisse vers l'ocre, galbe des muscles un peu plus lustré.
+    vec4 T = tissue(p);
+    if (uMode < 1.5) {
+      alb = mix(alb, vec3(.92, .44, .40), .7 * T.x);
+      alb = mix(alb, vec3(.66, .62, .72), .5 * T.y);
+      alb = mix(alb, vec3(.88, .68, .44), .5 * T.z);
+      alb = mix(alb, vec3(.84, .54, .46), .3 * T.w);
+      rough = .45 + .22 * T.x - .12 * T.w - .05 * T.y;
+    } else {   // écorché : chaque tissu avec sa couleur et sa brillance
+      alb = T.x * vec3(.90, .84, .70) + T.y * vec3(.82, .82, .88) + T.z * vec3(.85, .66, .30) + T.w * vec3(.55, .10, .10);
+      rough = T.x * .7 + T.y * .38 + T.z * .45 + T.w * .2;
+    }
+  }
+  float ndl = dot(n, L), dif = onCut ? .9 : clamp(ndl * .8 + .2, 0., 1.);
   float rim = onCut ? 0. : pow(1. - clamp(dot(n, -rd), 0., 1.), 3.) * .22;
   float ao = clamp(field(p + n * .8).x / .8, 0., 1.);
   vec3 col = alb * (dif * vec3(1., .96, .9) + vec3(.16, .17, .2) * (.5 + .5 * ao)) + rim;
+  if (!onCut) {   // reflet spéculaire (Blinn-Phong normalisé, Fresnel de Schlick) piloté par la rugosité
+    vec3 hv = normalize(L - rd); float a2 = pow(rough, 4.), sp = 2. / max(a2, 1e-4) - 2.;
+    float fr = .04 + .96 * pow(1. - clamp(dot(-rd, hv), 0., 1.), 5.);
+    col += vec3(1., .96, .9) * fr * (sp + 8.) / 25.1 * pow(max(dot(n, hv), 0.), sp) * max(ndl, 0.) * .8;
+  }
   gl_FragColor = vec4(pow(col, vec3(.4545)), 1);
 }`;
 const vs = "attribute vec2 a; void main(){ gl_Position = vec4(a, 0, 1); }";
@@ -305,16 +344,17 @@ function draw() {
   gl.uniform2f(U("uRes"), cv.width, cv.height);
   gl.uniform3f(U("uEye"), target[0] + dist * Math.cos(pitch) * Math.sin(yaw), target[1] + dist * Math.sin(pitch), target[2] + dist * Math.cos(pitch) * Math.cos(yaw));
   gl.uniform3fv(U("uTarget"), target);
-  const A = [], V = [], B = [], R = [], C = [], G = [], K = [];
+  const A = [], V = [], B = [], R = [], C = [], G = [], K = [], T = [];
   MUSCLES.forEach(m => {
     const pts = musclePoints(m), swell = Math.sqrt(m.L0 / Math.max(pathLength(pts), 1));   // volume conservé
     const effort = m.tendon ? 1 : 1 + .18 * P.effort;   // contraction active : le ventre gonfle, pas le tendon
     A.push(...pts[0]); V.push(...pts[1]); B.push(...pts[2]);
     R.push(m.r0 * P.mass, m.r1 * P.mass, m.rb * P.mass * swell * effort, m.at - (m.peak ? .08 * P.effort : 0));
-    C.push(...hex(m.c)); G.push(m.g); K.push(m.k || .8);
+    C.push(...hex(m.c)); G.push(m.g); K.push(m.k || .8); T.push(m.tendon ? 1 : 0);
   });
   gl.uniform3fv(U("uMA"), A); gl.uniform3fv(U("uMV"), V); gl.uniform3fv(U("uMB"), B); gl.uniform4fv(U("uMR"), R); gl.uniform3fv(U("uMC"), C);
-  gl.uniform1fv(U("uMG"), G); gl.uniform1fv(U("uMK"), K);
+  gl.uniform1fv(U("uMG"), G); gl.uniform1fv(U("uMK"), K); gl.uniform1fv(U("uMT"), T);
+  gl.uniform1f(U("uMode"), +document.getElementById("mode").value);
   gl.uniform3fv(U("uXA"), [...point(["H", 0, 0, 0]), ...point(["U", 0, 0, 0])]); gl.uniform3fv(U("uXB"), [...point(["H", 1, 0, 0]), ...point(["U", 1, 0, 0])]);
   gl.uniform3fv(U("uOle"), point(["U", -.05, -.2, -1.8]));
   gl.uniform3fv(U("uBackIn"), norm(sub(point(["H", .5, -1, -1]), point(["H", .5, 0, 0]))));
@@ -345,7 +385,7 @@ document.querySelectorAll("[data-v]").forEach(b => b.addEventListener("click", (
   if (b.dataset.v === "coupe") document.getElementById("cutOn").checked = true;
   setView(b.dataset.v);
 }));
-["ids", "bones", "fill", "cutOn"].forEach(id => document.getElementById(id).addEventListener("change", draw));
+["ids", "bones", "fill", "cutOn", "mode"].forEach(id => document.getElementById(id).addEventListener("change", draw));
 document.getElementById("legend").innerHTML = [...MUSCLES.map(m => [m.c, m.name]), [COL.bone, "Os"], [COL.fill, "Gabarit"], [COL.fat, "Graisse et réunion douce (coupe)"]]
   .map(([c, n]) => `<span class="sw" style="background:${c}"></span><span>${n}</span>`).join("");
 new ResizeObserver(draw).observe(cv);
