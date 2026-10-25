@@ -92,7 +92,7 @@ float3 NS = Mode < 0.5 ? Hyb : (Mode < 1.5 ? Nn : (Mode < 2.5 ? Hyb : Surf));
 float3 An = abs(Nn);
 float2 UV = (An.z > An.x && An.z > An.y) ? WP.xy : ((An.x > An.y) ? WP.yz : WP.xz);
 float X = DwamFilteredXorAuto(UV / Cell);
-float3 Albedo = float3(0.72, 0.66, 0.56) * lerp(0.82, 1.0, X);
+float3 Albedo = float3(0.72, 0.66, 0.56) * lerp(0.55, 1.0, X);
 // Soleil maison dans le shader (unlit) : diffus + ciel, terminateur doux
 float3 L = normalize(SunDir.xyz);
 float Ndl = saturate(dot(NS, L) * 0.85 + 0.15);

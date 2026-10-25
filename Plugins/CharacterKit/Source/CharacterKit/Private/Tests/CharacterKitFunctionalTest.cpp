@@ -194,7 +194,7 @@ namespace CharacterKitTestPrivate
 		return bOk;
 	}
 
-	void AddLights(UWorld* World)
+	UStaticMeshComponent* AddLights(UWorld* World)
 	{
 		AActor* Lights = World->SpawnActor<AActor>();
 		UDirectionalLightComponent* Sun = NewObject<UDirectionalLightComponent>(Lights);
@@ -214,6 +214,7 @@ namespace CharacterKitTestPrivate
 		Sky->SetIntensity(1.f);
 		Sky->SetupAttachment(Sun);
 		Sky->RegisterComponent();
+		return Ground;
 	}
 }
 
@@ -515,7 +516,7 @@ bool FCharacterKitJointBlendTest::RunTest(const FString& Parameters)
 	}
 
 	FTestWorld TW;
-	AddLights(TW.World);
+	UStaticMeshComponent* Ground = AddLights(TW.World);
 	UCharacterAssemblyComponent* Assembly = nullptr;
 	USkeletalMeshComponent* Skel = nullptr;
 	SpawnMannequin(TW, Mesh, Walk, Assembly, Skel);
@@ -551,38 +552,36 @@ bool FCharacterKitJointBlendTest::RunTest(const FString& Parameters)
 	// Image brute (sans post-process d'Unreal), éclairage calculé dans le matériau. Exposition < 0 = capture brute.
 	constexpr float Raw = -1.f;
 	static const TCHAR* ModeNames[] = { TEXT("hybride"), TEXT("origine"), TEXT("masque"), TEXT("surface"), TEXT("jonctions") };
-	auto Shoot = [&](float Scale, const FString& Tag)
-	{
-		const FVector Elbow = Skel->GetSocketLocation(TEXT("lowerarm_l"));
-		const FVector Knee = Skel->GetSocketLocation(TEXT("calf_l"));
-		const FVector Mid(0, 0, 95 * Scale);
-		for (int32 Mode : { 1, 0, 3, 2, 4 })
-		{
-			MID->SetScalarParameterValue(TEXT("Mode"), Mode);
-			const FString M = FString::Printf(TEXT("%s_%d_%s"), *Tag, Mode, ModeNames[Mode]);
-			TestTrue(TEXT("Capture corps"), Capture(TW.World, FVector(260, 260, 150) * Scale, Mid, M + TEXT("_body.png"), 640, 640, 40.f, Raw));
-			TestTrue(TEXT("Capture coude"), Capture(TW.World, Elbow + FVector(120, 40, 20) * Scale, Elbow, M + TEXT("_elbow.png"), 640, 640, 30.f, Raw));
-			TestTrue(TEXT("Capture genou"), Capture(TW.World, Knee + FVector(110, 90, 10) * Scale, Knee, M + TEXT("_knee.png"), 640, 640, 30.f, Raw));
-		}
-	};
 
-	// Taille normale, sonde lointaine à 12 cm (à l'échelle d'un bras)
-	MID->SetScalarParameterValue(TEXT("R2"), 12.f);
-	Shoot(1.f, TEXT("S1"));
+	// Le sol prend le même matériau, sans mélange (mode « origine ») : XOR + soleil maison
+	UMaterialInstanceDynamic* GroundMID = UMaterialInstanceDynamic::Create(Debug, Assembly);
+	GroundMID->SetScalarParameterValue(TEXT("Mode"), 1.f);
+	// Le XOR de Quilez pèse surtout sur sa plus grande octave (128 cases) : 1,2 cm donne un motif d'environ 1,5 m
+	GroundMID->SetScalarParameterValue(TEXT("Cell"), 1.2f);
+	Ground->SetMaterial(0, GroundMID);
 
-	// Bonhomme × 2,5 (idée de l'auteur) : le GDF a la même finesse en cm, donc 2,5 fois plus fine relativement.
-	// Sondes à l'échelle (5 et 12 cm × 2,5)
+	// Bonhomme × 2,5 (idée de l'auteur) : le GDF a la même finesse en cm, donc relativement 2,5 fois plus fine.
+	// Sondes à l'échelle (5 et 12 cm × 2,5).
 	Skel->GetOwner()->SetActorScale3D(FVector(2.5f));
 	MID->SetScalarParameterValue(TEXT("R1"), 12.5f);
 	MID->SetScalarParameterValue(TEXT("R2"), 30.f);
-	MID->SetScalarParameterValue(TEXT("Cell"), 15.f);
+	MID->SetScalarParameterValue(TEXT("Cell"), 0.35f);
 	for (int32 Warm = 0; Warm < 4; ++Warm)
 	{
 		TW.Tick(1, 0.f);
 		Capture(TW.World, FVector(650, 650, 375), FVector(0, 0, 240), TEXT("_warmup.png"), 640, 640, 40.f, Raw);
 	}
 	IFileManager::Get().Delete(*(FPaths::ProjectSavedDir() / TEXT("Automation/CharacterKit/_warmup.png")));
-	Shoot(2.5f, TEXT("S25"));
+
+	// Haut du corps (buste, bras) et bas du corps (bassin, jambes), en trois quarts face, pour chaque mode
+	const FVector Upper(0, 0, 330), Lower(0, 0, 120);
+	for (int32 Mode : { 1, 0, 3, 2, 4 })
+	{
+		MID->SetScalarParameterValue(TEXT("Mode"), Mode);
+		const FString M = FString::Printf(TEXT("Mode%d_%s"), Mode, ModeNames[Mode]);
+		TestTrue(TEXT("Capture haut"), Capture(TW.World, Upper + FVector(260, 260, 40), Upper, M + TEXT("_haut.png"), 640, 640, 40.f, Raw));
+		TestTrue(TEXT("Capture bas"), Capture(TW.World, Lower + FVector(280, 280, 30), Lower, M + TEXT("_bas.png"), 640, 640, 40.f, Raw));
+	}
 	return true;
 }
 
