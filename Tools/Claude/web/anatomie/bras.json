@@ -1,0 +1,74 @@
+{
+  "name": "Bras",
+  "description": "Chaque muscle est un volume rond tendu entre son origine et son insertion, qui gonfle au ventre et s'arrondit aux bouts ; ceux qui contournent le coude passent par un point de passage. Un gabarit remplit le tour des os. Le radius tourne autour du cubitus (pronation). Les amorces du torse forment l'aisselle.",
+  "frame": "cm ; x = extérieur (côté pouce en supination), y = haut, z = avant ; tête de l'humérus à l'origine. Une attache s'écrit [repère, t, x, z] : t le long de l'os (0 = haut, 1 = bas), x et z autour ; pour un repère « raw », [repère, x, y, z].",
+  "bones": [
+    {"id": "S", "name": "Omoplate et clavicule (fixe)", "raw": true, "ue": "clavicle_l"},
+    {"id": "H", "name": "Humérus", "parent": "S", "length": 30, "origin": [0, 0, 0], "joints": [{"param": "lift", "axis": [0, 0, 1], "sign": 1}], "ue": "upperarm_l"},
+    {"id": "U", "name": "Cubitus (repère de l'avant-bras)", "parent": "H", "length": 26, "origin": [0, -30, 0], "joints": [{"param": "flex", "axis": [1, 0, 0], "sign": -1}], "ue": "lowerarm_l"},
+    {"id": "R", "name": "Radius", "parent": "U", "length": 26, "origin": [0, 0, 0], "joints": [{"param": "pron", "axis": [-2.9, -26, -0.5], "pivot": [1.6, 0, 0.2], "sign": -1}], "ue": "lowerarm_twist_01_l"}
+  ],
+  "pose": [
+    {"id": "flex", "name": "Flexion du coude (°)", "min": 0, "max": 140, "step": 1, "value": 30},
+    {"id": "pron", "name": "Pronation, 0 = paume en avant (°)", "min": 0, "max": 160, "step": 1, "value": 70},
+    {"id": "lift", "name": "Élévation du bras (°)", "min": 0, "max": 90, "step": 1, "value": 10}
+  ],
+  "poseNote": "En pronation, le radius croise le cubitus : les muscles attachés au radius (biceps, brachio-radial, rond pronateur, extenseurs) s'enroulent autour de l'avant-bras.",
+  "muscles": [
+    {"name": "Deltoïde antérieur", "g": "deltoïde", "k": 1.4, "o": ["S", 0.4, 0.5, 2.7], "i": ["H", 0.46, 1.6, 0.5], "r0": 1.5, "r1": 0.6, "rb": 2.6, "at": 0.3, "c": "#d9744f"},
+    {"name": "Deltoïde moyen", "g": "deltoïde", "k": 1.4, "o": ["S", 2.7, 0.7, 0], "i": ["H", 0.46, 1.8, 0], "r0": 1.5, "r1": 0.6, "rb": 2.8, "at": 0.3, "c": "#e8925f"},
+    {"name": "Deltoïde postérieur", "g": "deltoïde", "k": 1.4, "o": ["S", 0.4, 0.5, -2.7], "i": ["H", 0.46, 1.6, -0.5], "r0": 1.5, "r1": 0.6, "rb": 2.5, "at": 0.3, "c": "#c2604a"},
+    {"name": "Crête du deltoïde", "g": "deltoïde", "k": 1.4, "tendon": true, "o": ["S", -1.2, 0.8, 2.9], "v": ["S", 2.8, 1.0, 0], "i": ["S", -0.4, 0.8, -3.4], "r0": 1.0, "r1": 1.0, "rb": 1.1, "at": 0.5, "c": "#d98a6a"},
+    {"name": "Grand pectoral (amorce)", "g": "pectoral", "k": 1.0, "o": ["S", -8, -3.0, 5.0], "i": ["H", 0.16, 1.0, 1.3], "r0": 2.2, "r1": 0.7, "rb": 2.6, "at": 0.35, "c": "#c97a6a"},
+    {"name": "Grand dorsal (amorce)", "g": "dorsal", "k": 1.0, "o": ["S", -6, -10, -5], "v": ["S", -2.6, -6.5, -2.6], "i": ["H", 0.15, -0.5, 0.9], "r0": 2.2, "r1": 0.6, "rb": 2.3, "at": 0.4, "c": "#8a7fb5"},
+    {"name": "Grand rond (amorce)", "g": "dorsal", "k": 1.0, "o": ["S", -6, -7, -6], "i": ["H", 0.16, -1.1, 0.4], "r0": 1.5, "r1": 0.6, "rb": 1.9, "at": 0.45, "c": "#9c92c4"},
+    {"name": "Coraco-brachial", "g": "coraco", "o": ["S", -1.2, -1.2, 2.6], "i": ["H", 0.5, -1.4, 0.5], "r0": 0.5, "r1": 0.5, "rb": 1.1, "at": 0.45, "c": "#a86a8a"},
+    {"name": "Biceps", "g": "biceps", "peak": true, "o": ["S", 0.4, -1.2, 2.4], "i": ["R", 0.12, 0.2, 1.0], "r0": 0.5, "r1": 0.5, "rb": 2.7, "at": 0.55, "c": "#d65a5a"},
+    {"name": "Brachial", "g": "brachial", "peak": true, "o": ["H", 0.48, 0.2, 1.2], "i": ["U", 0.07, -0.1, 0.9], "r0": 0.7, "r1": 0.7, "rb": 2.2, "at": 0.6, "c": "#b84c4c"},
+    {"name": "Triceps long", "g": "triceps", "o": ["S", -0.8, -2.2, -2.4], "i": ["H", 0.74, -1.8, -1.9], "r0": 0.6, "r1": 0.6, "rb": 2.6, "at": 0.42, "c": "#7a8fc9"},
+    {"name": "Triceps latéral", "g": "triceps", "o": ["H", 0.18, 1.6, -1.3], "i": ["H", 0.74, 1.8, -1.9], "r0": 0.6, "r1": 0.6, "rb": 2.3, "at": 0.42, "c": "#93a6dc"},
+    {"name": "Triceps médial", "g": "triceps", "o": ["H", 0.5, -1.8, -1.2], "i": ["U", -0.03, -0.6, -1.7], "r0": 0.6, "r1": 0.6, "rb": 1.7, "at": 0.55, "c": "#6474a8"},
+    {"name": "Tendon du triceps", "g": "triceps", "tendon": true, "o": ["H", 0.47, 0, -1.5], "i": ["U", -0.04, 0, -1.5], "r0": 0.7, "r1": 0.7, "rb": 1.35, "at": 0.3, "c": "#ece6da"},
+    {"name": "Anconé", "g": "anconé", "o": ["H", 0.98, 2.1, -0.8], "i": ["U", 0.18, 0.6, -1.2], "r0": 0.7, "r1": 0.7, "rb": 1.2, "at": 0.45, "c": "#5a6aa0"},
+    {"name": "Brachio-radial", "g": "brachio-radial", "o": ["H", 0.68, 2.3, 0.4], "v": ["U", 0.12, 2.6, 0.7], "i": ["R", 0.94, 1.5, 0.2], "r0": 0.5, "r1": 0.5, "rb": 2.2, "at": 0.38, "c": "#e2b04f"},
+    {"name": "Long ext. radial", "g": "extenseurs", "o": ["H", 0.82, 2.4, -0.1], "v": ["U", 0.12, 2.4, -0.3], "i": ["R", 0.95, 1.1, -0.6], "r0": 0.5, "r1": 0.5, "rb": 1.6, "at": 0.35, "c": "#d4a04a"},
+    {"name": "Extenseurs des doigts", "g": "extenseurs", "o": ["H", 0.99, 2.1, -0.4], "v": ["U", 0.12, 1.8, -1.1], "i": ["R", 0.95, 0.2, -0.85], "r0": 0.8, "r1": 0.5, "rb": 2.0, "at": 0.33, "c": "#c9a24a"},
+    {"name": "Ext. ulnaire du carpe", "g": "extenseurs", "o": ["H", 0.99, 2.0, -0.7], "v": ["U", 0.12, 0.8, -1.5], "i": ["U", 0.95, -1.1, -0.6], "r0": 0.6, "r1": 0.45, "rb": 1.3, "at": 0.35, "c": "#b08a3a"},
+    {"name": "Fléchisseurs", "g": "fléchisseurs", "o": ["H", 0.99, -2.5, -0.4], "v": ["U", 0.12, -2.2, 0.7], "i": ["R", 0.95, 0.2, 0.75], "r0": 0.95, "r1": 0.6, "rb": 2.4, "at": 0.33, "c": "#8fbf6a"},
+    {"name": "Fléch. ulnaire du carpe", "g": "fléchisseurs", "o": ["H", 0.99, -2.5, -0.7], "v": ["U", 0.12, -2.3, -0.6], "i": ["U", 0.95, -1.1, 0.25], "r0": 0.8, "r1": 0.5, "rb": 1.5, "at": 0.35, "c": "#76a85a"},
+    {"name": "Rond pronateur", "g": "fléchisseurs", "o": ["H", 0.97, -2.3, 0.1], "i": ["R", 0.5, 1.3, 0.3], "r0": 0.7, "r1": 0.5, "rb": 1.4, "at": 0.4, "c": "#5f9a55"}
+  ],
+  "skeleton": [
+    {"name": "Clavicule (amorce)", "a": ["S", -7, 1.4, 3], "b": ["S", -2.2, 1.5, 1.6], "r": 1.0},
+    {"name": "Acromion", "a": ["S", -2.2, 1.5, 1.4], "b": ["S", 3.6, 1.6, -0.2], "r": 1.1},
+    {"name": "Tête de l'humérus", "a": ["S", 0, -0.3, 0], "b": ["S", 0, -0.3, 0], "r": 2.4},
+    {"name": "Humérus", "a": ["H", 0.05, 0, 0], "b": ["H", 0.95, 0, 0], "r": 1.2},
+    {"name": "Épicondyle latéral", "a": ["H", 0.95, 0.8, -0.2], "b": ["H", 1, 2.1, -0.3], "r": 0.65},
+    {"name": "Épicondyle médial", "a": ["H", 0.95, -0.8, -0.3], "b": ["H", 1, -2.6, -0.5], "r": 0.75},
+    {"name": "Cubitus, olécrane", "a": ["U", -0.05, -0.2, -1.6], "b": ["U", 1, -1.3, -0.3], "r": 0.75},
+    {"name": "Radius", "a": ["R", 0.03, 1.6, 0.2], "b": ["R", 1, 1.3, 0.2], "r": 0.75},
+    {"name": "Tête distale du radius", "a": ["R", 0.96, 0.4, 0.1], "b": ["R", 0.96, 1.9, 0.2], "r": 0.8},
+    {"name": "Tête du cubitus", "a": ["U", 0.97, -1.3, -0.3], "b": ["U", 0.97, -1.3, -0.3], "r": 0.75}
+  ],
+  "plates": [
+    {"name": "Main (provisoire)", "a": ["R", 1.03, 0, 0], "b": ["R", 1.33, 0, 0], "up": [["R", 1.1, 0, 0], ["R", 1.1, 0, 1]], "r": [2.1, 0.8], "len": 0.55}
+  ],
+  "fill": [
+    {"a": ["H", 0.12, 0, -0.2], "b": ["H", 0.9, 0, -0.2], "ra": 2.3, "rb": 2.0},
+    {"a": ["U", 0.02, 0, -0.3], "b": ["U", 0.9, 0, 0], "ra": 2.3, "rb": 1.3}
+  ],
+  "fat": {
+    "segments": [
+      {"a": ["H", 0, 0, 0], "b": ["H", 1, 0, 0], "w": [1.15, 1.15], "ramp": [0, 1], "dir": {"from": ["H", 0.5, 0, 0], "to": ["H", 0.5, -1, -1], "w": 0.3}},
+      {"a": ["U", 0, 0, 0], "b": ["U", 1, 0, 0], "w": [1.05, 0.35], "ramp": [0.3, 1]}
+    ],
+    "thin": [
+      {"name": "Olécrane", "p": ["U", -0.05, -0.2, -1.8], "r": [1.5, 4.5], "min": 0.3}
+    ]
+  },
+  "cut": [
+    {"a": ["H", 0.06, 0, 0], "b": ["H", 0.96, 0, 0]},
+    {"a": ["U", 0.02, 0, 0], "b": ["U", 0.95, 0, 0]}
+  ],
+  "view": {"target": [0, -26, 0], "dist": 100, "near": 32}
+}
