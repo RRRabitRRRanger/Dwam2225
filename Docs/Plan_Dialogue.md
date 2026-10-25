@@ -2,7 +2,7 @@
 
 > Accueil : [[00 - Accueil]] · Lié à : [[Plan_EireneNexus]], [[Plan_3C]], [[Plan_VitalPotential]], [[Plan_KlattVoice]], [[Plan_Face]], [[Plan_VerticalSlice]], [[Feuille_de_route]] (J5), [[References_Precedents]] (section 8), [[Confrontation_Gemini_Narration]]
 
-> Statut : 📐 **brouillon de discussion** (2026-10-25). Seule l'intention de l'auteur est posée ; rien n'est décidé, rien n'est codé.
+> Statut : 📐 **intention et scène validées** (2026-10-25). La conception technique (faits, règles, format d'écriture, intégration Unreal) reste à écrire ; rien n'est codé.
 
 ## Intention (auteur, 2026-10-25)
 
@@ -72,9 +72,23 @@ Dit « de manière simpliste » par l'auteur :
 
 **Le minimum pour J5** (à valider) : un concept « le chef exige » ; quatre répliques du joueur ; l'emote s'agenouiller ; une dizaine de répliques du chef et de deux bandits selon la manière de se battre ; un état « rendu » respecté ; une poignée de faits sauvegardés. Pas de rumeurs ni de factions complètes (P2).
 
+### Validation de l'auteur (2026-10-25)
+
+- **La scène et le minimum pour J5 : validés** (« globalement oui », « tu as saisi l'idée »).
+- **Point 4, attention à la quantité de barks** : des commentaires pendant le combat, oui, mais sans saturer. À régler dès le départ (fréquence, temps de repos entre deux répliques, priorité aux répliques rares et précises).
+- Points 5 (la reddition qui engage) et 6 (la fin en négociation, « par exemple ») : oui.
+
+## Décisions (auteur, 2026-10-25)
+
+- **Personnage** : page blanche (*Skyrim*, *Diablo*).
+- **Répliques du joueur** : liste à la *KOTOR*, voix Klatt pour les PNJ. **Muet ou non** : indifférent pour l'auteur (« au choix »).
+- **Passer ou accélérer les dialogues, intelligemment** : à prévoir. Référence de l'auteur : *Cyberpunk 2077*, qui le fait bien.
+- **Au combat**, l'intention se lit dans les gestes **et** par des gestes explicites (baisser l'arme, emotes).
+
 ## Questions ouvertes
 
-1. ~~Le personnage du joueur~~ → **page blanche** (*Skyrim*, *Diablo*).
-2. ~~Les répliques du joueur~~ → **liste à la *KOTOR*, voix Klatt**. Le joueur reste-t-il muet ?
-3. **Au combat** : l'intention se lit **seulement** dans les gestes (rien d'affiché), ou aussi par des gestes explicites (baisser l'arme, une roue d'emotes) ?
-4. **La scène du chef** : la version ci-dessus te convient-elle, et le minimum pour J5 ?
+1. ~~Le personnage du joueur~~ → page blanche.
+2. ~~Les répliques du joueur~~ → *KOTOR* + Klatt ; muet au choix.
+3. ~~Au combat~~ → gestes implicites **et** explicites.
+4. ~~La scène du chef~~ → validée.
+5. Ce que veut dire « intelligemment » pour passer un dialogue (ne jamais sauter un choix ? passer une réplique à la fois ? accélérer la voix ?) : à préciser au moment de la conception technique.
