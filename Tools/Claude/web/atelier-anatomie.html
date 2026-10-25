@@ -164,16 +164,17 @@ vec2 musclePiece(vec3 p, vec3 a, vec3 b, float t0, float t1, vec4 r) {
 }
 // Muscle sans point de passage (v = a) : un seul morceau droit.
 // Avec un point de passage : une courbe (Bézier quadratique qui passe par v à mi-parcours) découpée en quatre morceaux
-// courts, réunis en douceur. Deux morceaux droits en angle laissaient une boule à l'extérieur du pli (gastrocnémien).
+// courts, recollés par un simple min : les rayons se raccordent exactement aux jonctions. (Un fondu doux entre les
+// morceaux ajoutait un renflement à chaque jonction : des anneaux le long du muscle.)
 vec2 muscleG(vec3 p, vec3 a, vec3 v, vec3 b, vec4 r) {
   if (length(v - a) < .01) { vec2 m = musclePiece(p, a, b, 0., 1., r); return vec2(m.x * .8, m.y); }
   vec3 c = 2. * v - .5 * (a + b);
   vec3 q1 = .5625 * a + .375 * c + .0625 * b, q3 = .0625 * a + .375 * c + .5625 * b;
   float l1 = length(q1 - a), l2 = l1 + length(v - q1), l3 = l2 + length(q3 - v), L = l3 + length(b - q3);
   vec2 m = musclePiece(p, a, q1, 0., l1 / L, r), n;
-  n = musclePiece(p, q1, v, l1 / L, l2 / L, r); m = vec2(smin(m.x, n.x, .3), m.x < n.x ? m.y : n.y);
-  n = musclePiece(p, v, q3, l2 / L, l3 / L, r); m = vec2(smin(m.x, n.x, .3), m.x < n.x ? m.y : n.y);
-  n = musclePiece(p, q3, b, l3 / L, 1., r); m = vec2(smin(m.x, n.x, .3), m.x < n.x ? m.y : n.y);
+  n = musclePiece(p, q1, v, l1 / L, l2 / L, r); m = n.x < m.x ? n : m;
+  n = musclePiece(p, v, q3, l2 / L, l3 / L, r); m = n.x < m.x ? n : m;
+  n = musclePiece(p, q3, b, l3 / L, 1., r); m = n.x < m.x ? n : m;
   return vec2(m.x * .8, m.y);
 }
 float capsule(vec3 p, vec3 a, vec3 b, float r) { vec3 ab = b - a; float t = clamp(dot(p - a, ab) / max(dot(ab, ab), 1e-4), 0., 1.); return length(p - (a + ab * t)) - r; }
