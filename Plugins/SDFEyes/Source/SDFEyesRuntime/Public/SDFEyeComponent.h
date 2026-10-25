@@ -44,7 +44,7 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Eye|Animation", meta = (ClampMin = "0", ClampMax = "1"))
 	float Blink = 0.f;
 
-	/** Regard (radians) : X gauche / droite, Y haut / bas. */
+	/** Regard (radians) : X vers le Y local de l'œil (même sens pour tous les yeux, miroir compris), Y haut / bas. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Eye|Animation")
 	FVector2D Gaze = FVector2D::ZeroVector;
 

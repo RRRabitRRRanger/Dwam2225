@@ -215,7 +215,10 @@ float2 SDFEyes_Map(float3 Pos, FSDFEyeParams P, float LashOn)
 	const float g = P.Gw*SDFEyes_SS(0.0, 0.3, SDFEyes_Bump(F.x, P.T0U, 1.0).x);      // le pli s'efface vers les coins
 	if (g > 0.001) Lu = SDFEyes_SMax(Lu, g - length(float2(r - P.Rout, SDFEyes_EdgeDist(F, SDFEyes_EdgeF(F.x, P), P))), 0.02);
 	const float Ll = SDFEyes_RInter(Shell, SDFEyes_EdgeDist(F, EL, P), 0.45*P.T);
-	float Skin = min(Lu, Ll);
+	// Au-delà des coins, les deux paupières se rejoignent sur la ligne de fermeture : sans ça, un sillon fait le tour
+	// du globe. Juste après les coins, elles redeviennent une seule peau (la coque).
+	const float Beyond = SDFEyes_SS(1.0, 1.15, abs(F.x));
+	float Skin = lerp(min(Lu, Ll), Shell, Beyond);
 	float Car = 1e3;
 	if (P.Car > 0.01)
 	{

@@ -35,7 +35,8 @@ USDFEyeComponent::USDFEyeComponent()
 void USDFEyeComponent::OnRegister()
 {
 	Super::OnRegister();
-	Seed = GetTypeHash(GetFName()) & 0xffff;
+	// Même graine pour tous les yeux d'un acteur : ils clignent et bougent ensemble
+	Seed = GetOwner() ? (GetTypeHash(GetOwner()->GetFName()) & 0xffff) : 0;
 	UpdateEye();
 }
 
@@ -122,7 +123,8 @@ void USDFEyeComponent::UpdateEye()
 	Set(TEXT("EyeRadius"), SphereRadius / SupportRatio);
 	Set(TEXT("Mirror"), bMirror ? 1.f : 0.f);
 	Set(TEXT("Blink"), B);
-	Set(TEXT("GazeX"), G.X);
+	// Gaze.X suit le Y local de l'œil (le même côté pour tous les yeux) ; le miroir inverse cet axe dans le shader
+	Set(TEXT("GazeX"), bMirror ? -G.X : G.X);
 	Set(TEXT("GazeY"), G.Y);
 	Set(TEXT("Follow"), Follow);
 	Set(TEXT("Pupil"), Pupil);

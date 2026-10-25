@@ -912,6 +912,7 @@ bool FCharacterKitEyesTest::RunTest(const FString& Parameters)
 		Eye->bMicroLife = true;
 	}
 	int32 Blinks = 0;
+	float Desync = 0.f;
 	for (int32 F = 0; F < 240; ++F)
 	{
 		for (USDFEyeComponent* Eye : { EyeA, EyeB })
@@ -919,15 +920,22 @@ bool FCharacterKitEyesTest::RunTest(const FString& Parameters)
 			Eye->SetMicroLifeTime(F / 30.0);
 		}
 		EyeA->UpdateEye();
-		float B = 0.f;
+		EyeB->UpdateEye();
+		float B = 0.f, B2 = 0.f;
 		if (UMaterialInstanceDynamic* M = Cast<UMaterialInstanceDynamic>(EyeA->GetMaterial(0)))
 		{
 			M->GetScalarParameterValue(FName(TEXT("Blink")), B);
 		}
+		if (UMaterialInstanceDynamic* M = Cast<UMaterialInstanceDynamic>(EyeB->GetMaterial(0)))
+		{
+			M->GetScalarParameterValue(FName(TEXT("Blink")), B2);
+		}
+		Desync = FMath::Max(Desync, FMath::Abs(B - B2));
 		Blinks += B > 0.9f ? 1 : 0;
 	}
 	AddInfo(FString::Printf(TEXT("Micro-vie : %d images (sur 240, 8 s) avec l'œil fermé"), Blinks));
 	TestTrue(TEXT("Au moins un clignement en 8 s"), Blinks > 0);
+	TestTrue(TEXT("Les deux yeux clignent ensemble"), Desync < 0.01f);
 
 	// Un troisième œil, sur le devant du bras gauche, près de l'épaule : sans toucher à la tête
 	{
