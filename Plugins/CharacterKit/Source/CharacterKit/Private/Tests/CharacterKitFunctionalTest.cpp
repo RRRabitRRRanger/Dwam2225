@@ -586,3 +586,98 @@ bool FCharacterKitJointBlendTest::RunTest(const FString& Parameters)
 }
 
 #endif
+
+#if WITH_DEV_AUTOMATION_TESTS
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FCharacterKitTwoSpheresTest, "CharacterKit.Visual.TwoSpheres",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FCharacterKitTwoSpheresTest::RunTest(const FString& Parameters)
+{
+	using namespace CharacterKitTestPrivate;
+
+	UMaterialInterface* Debug = LoadObject<UMaterialInterface>(nullptr, TEXT("/Game/_Claude/M_Claude_JointBlendDebug.M_Claude_JointBlendDebug"));
+	UStaticMesh* Sphere = LoadObject<UStaticMesh>(nullptr, TEXT("/Engine/BasicShapes/Sphere.Sphere"));
+	if (!Debug || !Sphere)
+	{
+		AddError(TEXT("Assets de test introuvables"));
+		return false;
+	}
+
+	// Demande de l'auteur : deux sphères d'échelle 2 et 3 (rayons 100 et 150 cm) qui se coupent, avec et sans le shader
+	FTestWorld TW;
+	UStaticMeshComponent* Ground = AddLights(TW.World);
+	AActor* Holder = TW.World->SpawnActor<AActor>();
+	UMaterialInstanceDynamic* MID = UMaterialInstanceDynamic::Create(Debug, Holder);
+	MID->SetScalarParameterValue(TEXT("Cell"), 0.6f);
+	auto AddSphere = [&](const FVector& Center, float Scale)
+	{
+		UStaticMeshComponent* C = NewObject<UStaticMeshComponent>(Holder);
+		C->SetStaticMesh(Sphere);
+		C->SetMaterial(0, MID);
+		C->SetMobility(EComponentMobility::Movable);
+		if (!Holder->GetRootComponent())
+		{
+			Holder->SetRootComponent(C);
+		}
+		C->RegisterComponent();
+		C->SetWorldTransform(FTransform(FQuat::Identity, Center, FVector(Scale)));
+	};
+	AddSphere(FVector(-110, 0, 150), 2.f);
+	AddSphere(FVector(110, 0, 150), 3.f);
+	UMaterialInstanceDynamic* GroundMID = UMaterialInstanceDynamic::Create(Debug, Holder);
+	GroundMID->SetScalarParameterValue(TEXT("Mode"), 1.f);
+	GroundMID->SetScalarParameterValue(TEXT("Cell"), 1.2f);
+	Ground->SetMaterial(0, GroundMID);
+
+	constexpr float Raw = -1.f;
+	const FVector Eye(0, 650, 260), Target(0, 0, 150);
+	if (GDistanceFieldAsyncQueue)
+	{
+		GDistanceFieldAsyncQueue->BlockUntilAllBuildsComplete();
+	}
+	for (int32 Warm = 0; Warm < 6; ++Warm)
+	{
+		TW.Tick(1, 0.f);
+		Capture(TW.World, Eye, Target, TEXT("_warmup.png"), 640, 480, 50.f, Raw);
+		if (GShaderCompilingManager)
+		{
+			GShaderCompilingManager->FinishAllCompilation();
+		}
+	}
+	IFileManager::Get().Delete(*(FPaths::ProjectSavedDir() / TEXT("Automation/CharacterKit/_warmup.png")));
+
+	static const TCHAR* ModeNames[] = { TEXT("hybride"), TEXT("origine"), TEXT("masque"), TEXT("surface"), TEXT("jonctions") };
+	// Trois réglages : actuel (sondes 5 / 40, base 0,3), sans base, puis sondes plus grandes qu'une case du GDF (25 / 60)
+	struct FSetting { const TCHAR* Tag; float R1, R2, Base; };
+	for (const FSetting& S : { FSetting{ TEXT("actuel"), 5.f, 40.f, 0.3f }, FSetting{ TEXT("base0"), 5.f, 40.f, 0.f }, FSetting{ TEXT("sondes25"), 25.f, 60.f, 0.f } })
+	{
+		MID->SetScalarParameterValue(TEXT("R1"), S.R1);
+		MID->SetScalarParameterValue(TEXT("R2"), S.R2);
+		MID->SetScalarParameterValue(TEXT("BaseBlend"), S.Base);
+		for (int32 Mode : { 1, 0, 3, 2, 4 })
+		{
+			MID->SetScalarParameterValue(TEXT("Mode"), Mode);
+			TestTrue(TEXT("Capture sphères"), Capture(TW.World, Eye, Target,
+				FString::Printf(TEXT("Spheres_%s_%d_%s.png"), S.Tag, Mode, ModeNames[Mode]), 640, 480, 50.f, Raw));
+		}
+	}
+	// Mesure de la distance lue par la sonde proche (mode 5), pour plusieurs hauteurs de sonde
+	MID->SetScalarParameterValue(TEXT("Mode"), 5.f);
+	for (float R : { 5.f, 25.f, 60.f })
+	{
+		MID->SetScalarParameterValue(TEXT("R1"), R);
+		Capture(TW.World, Eye, Target, FString::Printf(TEXT("Spheres_mesure_R%d.png"), FMath::RoundToInt(R)), 640, 480, 50.f, Raw);
+	}
+	MID->SetScalarParameterValue(TEXT("R1"), 25.f);
+
+	// Gros plan sur l'intersection, sondes 25 / 60
+	for (int32 Mode : { 1, 0, 2 })
+	{
+		MID->SetScalarParameterValue(TEXT("Mode"), Mode);
+		Capture(TW.World, FVector(-40, 330, 230), FVector(-20, 0, 150), FString::Printf(TEXT("Spheres_zoom_%d_%s.png"), Mode, ModeNames[Mode]), 640, 480, 40.f, Raw);
+	}
+	return true;
+}
+
+#endif

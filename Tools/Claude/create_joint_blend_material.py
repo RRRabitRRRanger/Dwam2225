@@ -108,6 +108,13 @@ if (Mode > 3.5)
     float J2 = saturate(1.0 - D2 / max(R2, 0.01));
     C = lerp(float3(0.5, 0.5, 0.5) * (0.4 + 0.6 * Ndl), float3(0.9, 0.1, 0.05), max(J, J2 * 0.5));
 }
+if (Mode > 4.5)
+{
+    // Mesure : distance lue par la sonde proche, divisée par sa hauteur R1. 1 (blanc) = attendu loin de tout ;
+    // 0 (noir) = la sonde croit toucher une surface ; rouge = au-delà de 1,5 ; bleu = négatif (dans un objet)
+    float Ratio = D1 / max(R1, 0.01);
+    C = Ratio < 0.0 ? float3(0.1, 0.2, 1.0) : (Ratio > 1.5 ? float3(1.0, 0.1, 0.1) : saturate(Ratio).xxx);
+}
 return C;
 """)
 for n, src in zip(names, [vn, r1, d1, g1, r2, d2, g2, g0, base, alpha, mode, wp, sun, cell]):
