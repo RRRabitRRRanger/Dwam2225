@@ -165,5 +165,30 @@ FCharacterDescription UCharacterKitLibrary::MakeProxyDescription(const USkeletal
 			Desc.Parts.Add(Part);
 		}
 	}
+	// Rotules aux articulations, comme sur les figurines : une sphère à l'origine de l'os, qui ne s'allonge pas avec lui
+	struct FJoint { const TCHAR* Bone; float Diameter; };
+	static const FJoint Joints[] =
+	{
+		{ TEXT("upperarm"), 11.f }, { TEXT("lowerarm"), 9.f }, { TEXT("hand"), 7.f },
+		{ TEXT("thigh"), 16.f }, { TEXT("calf"), 12.f }, { TEXT("foot"), 9.f },
+	};
+	for (const FJoint& Joint : Joints)
+	{
+		for (const TCHAR* Side : { TEXT("l"), TEXT("r") })
+		{
+			const FName Bone = SideName(Joint.Bone, Side);
+			if (Ref.FindBoneIndex(Bone) == INDEX_NONE)
+			{
+				continue;
+			}
+			FCharacterPart Part;
+			Part.Slot = FName(FString::Printf(TEXT("Joint_%s"), *Bone.ToString()));
+			Part.Bone = Bone;
+			Part.Mesh = Sphere;
+			Part.bIgnoreLength = true;
+			Part.Offset = FTransform(FQuat::Identity, FVector::ZeroVector, FVector(Joint.Diameter / 100.f));
+			Desc.Parts.Add(Part);
+		}
+	}
 	return Desc;
 }

@@ -1,4 +1,6 @@
 #include "CharacterAssemblyComponent.h"
+#include "CharacterBodyProfile.h"
+#include "CharacterKitAnimInstance.h"
 #include "Components/SkeletalMeshComponent.h"
 #include "Components/StaticMeshComponent.h"
 #include "Engine/StaticMesh.h"
@@ -71,6 +73,12 @@ void UCharacterAssemblyComponent::Assemble()
 	}
 	Skeleton->SetVisibility(!bHideSkeletonMesh);
 
+	// Profil de corps : longueurs dans le squelette (si l'anim instance le sait), épaisseurs sur les pièces
+	if (UCharacterKitAnimInstance* Anim = Cast<UCharacterKitAnimInstance>(Skeleton->GetAnimInstance()))
+	{
+		Anim->SetProfile(Source->Profile);
+	}
+
 	for (const FCharacterPart& Part : Source->Parts)
 	{
 		if (!Part.Mesh)
@@ -98,7 +106,7 @@ void UCharacterAssemblyComponent::Assemble()
 		Comp->SetMobility(EComponentMobility::Movable);
 		Comp->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 		Comp->SetupAttachment(Skeleton, Part.Bone);
-		Comp->SetRelativeTransform(Part.Offset);
+		Comp->SetRelativeTransform(CharacterBodyProfile::ApplyToPartOffset(Source->Profile, Part.Bone, Part.Offset, Part.bIgnoreLength));
 		Comp->RegisterComponent();
 
 		PartComponents.Add(Comp);

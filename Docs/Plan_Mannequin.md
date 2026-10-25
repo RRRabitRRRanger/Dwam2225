@@ -95,3 +95,13 @@ Ensuite : la bouche ([[Plan_Face]]), les vêtements, la fiche de PNJ qui référ
 - Les pièces de test : formes du moteur, ou un premier kit fait par l'auteur ?
 - Le nom du plugin.
 - **Les recherches de l'auteur** sur sa façon de faire (à venir) : elles priment sur ce plan.
+
+## Lot du 2026-10-25 : ratios, rotules, mélange des normales (✔ vérifié par Claude, captures)
+
+- **M2 — Profil de corps** (`FCharacterBodyProfile` dans la description) : taille, longueur des jambes, des bras, du tronc, du cou ; taille de la tête ; épaules, cage, taille, bassin ; épaisseur des bras et des jambes. Les **longueurs** passent par le squelette (`UCharacterKitAnimInstance`, sans Blueprint : l'os parent s'allonge, le bassin monte ou descend pour garder les pieds au sol) ; les **épaisseurs** par les pièces. Six préréglages tirés de la planche de torses : Standard, Enfant, Mince, Lourd, Musclé, Grand. Test : pieds au sol à ±1,2 cm pour tous.
+- **Rotules** aux épaules, coudes, poignets, hanches, genoux, chevilles (option `bIgnoreLength` : une pièce qui ne s'allonge pas avec l'os). 35 pièces, symétrie 0,01 cm.
+- **Mélange des normales** : matériau de test `Content/_Claude/M_Claude_JointBlendDebug` (créé par script, `Tools/Claude/create_joint_blend_material.py`), quatre modes : hybride (deux sondes GDF), normale d'origine, masque en orange, méthode « surface » de l'auteur.
+  - **Le champ global suit le personnage qui marche** : sur trois images consécutives, le masque reste collé aux pièces, pas de traînée visible à cette échelle. La variante du snake n'est donc **pas** nécessaire (décision de l'auteur : ne la tester qu'en cas d'échec).
+  - **R2 = 40 cm est trop large pour un corps** : tout le personnage est dans le mélange. **R2 ≈ 12 cm** concentre le masque aux vraies jonctions (bras contre le buste, entre les cuisses, chevilles).
+  - **Le mélange reste discret aux coudes** : la précision du GDF (de l'ordre de 10 à 20 cm près de la caméra) est du même ordre qu'un avant-bras. Pistes : rapprocher la résolution (réglages du GDF), ou la variante « capsules par os » (`DwamMeshNormalWithCapsules`), exacte, pour les membres.
+- Pièges de test notés : le shader ne compile qu'au premier rendu (capture de chauffe) ; les MDF se construisent en arrière-plan (`BlockUntilAllBuildsComplete`) ; une Scene Capture n'a de GDF que si `bAlwaysPersistRenderingState` est vrai.

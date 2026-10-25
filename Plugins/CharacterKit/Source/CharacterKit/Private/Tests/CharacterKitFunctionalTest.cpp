@@ -1,5 +1,8 @@
-#include "CharacterAssemblyComponent.h"
+﻿#include "CharacterAssemblyComponent.h"
 #include "CharacterKitLibrary.h"
+#include "CharacterKitAnimInstance.h"
+#include "CharacterBodyProfile.h"
+#include "Materials/MaterialInstanceDynamic.h"
 #include "CharacterPreset.h"
 #include "Animation/AnimSequence.h"
 #include "Animation/AnimSingleNodeInstance.h"
@@ -20,6 +23,8 @@
 #include "Misc/Paths.h"
 #include "RenderingThread.h"
 #include "TextureResource.h"
+#include "ShaderCompiler.h"
+#include "DistanceFieldAtlas.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
 
@@ -59,7 +64,10 @@ namespace CharacterKitTestPrivate
 				Time += Dt;
 				for (USkeletalMeshComponent* Skel : Skeletons)
 				{
-					Skel->SetPosition(FMath::Fmod(Time, FMath::Max(Skel->GetSingleNodeInstance() ? Skel->GetSingleNodeInstance()->GetLength() : 1.f, 0.01f)), false);
+					if (UCharacterKitAnimInstance* Anim = Cast<UCharacterKitAnimInstance>(Skel->GetAnimInstance()))
+					{
+						Anim->Time = Time;
+					}
 					Skel->TickAnimation(0.f, false);
 					Skel->RefreshBoneTransforms();
 				}
@@ -107,10 +115,14 @@ namespace CharacterKitTestPrivate
 		Actor->SetRootComponent(OutSkel);
 		OutSkel->SetSkeletalMesh(Mesh);
 		OutSkel->VisibilityBasedAnimTickOption = EVisibilityBasedAnimTickOption::AlwaysTickPoseAndRefreshBones;
-		OutSkel->RegisterComponent();
-		OutSkel->SetAnimationMode(EAnimationMode::AnimationSingleNode);
-		OutSkel->PlayAnimation(Anim, true);
+		OutSkel->SetAnimationMode(EAnimationMode::AnimationBlueprint);
+		OutSkel->SetAnimInstanceClass(UCharacterKitAnimInstance::StaticClass());
 		OutSkel->bEnableUpdateRateOptimizations = false;
+		OutSkel->RegisterComponent();
+		if (UCharacterKitAnimInstance* AnimInstance = Cast<UCharacterKitAnimInstance>(OutSkel->GetAnimInstance()))
+		{
+			AnimInstance->Sequence = Anim;
+		}
 		TW.Skeletons.Add(OutSkel);
 
 		OutAssembly = NewObject<UCharacterAssemblyComponent>(Actor, TEXT("Assembly"));
@@ -121,7 +133,7 @@ namespace CharacterKitTestPrivate
 	}
 
 	/** Rend la scène depuis un point de vue et enregistre un PNG. */
-	bool Capture(UWorld* World, const FVector& Eye, const FVector& Target, const FString& FileName)
+	bool Capture(UWorld* World, const FVector& Eye, const FVector& Target, const FString& FileName, int32 Width = 640, int32 Height = 640, float Fov = 40.f, float ExposureBias = 4.5f)
 	{
 		AActor* Rig = World->SpawnActor<AActor>();
 		USceneCaptureComponent2D* Cap = NewObject<USceneCaptureComponent2D>(Rig);
@@ -129,18 +141,19 @@ namespace CharacterKitTestPrivate
 		Cap->RegisterComponent();
 
 		UTextureRenderTarget2D* RT = NewObject<UTextureRenderTarget2D>(Rig);
-		RT->InitCustomFormat(640, 640, PF_B8G8R8A8, false);
+		RT->InitCustomFormat(Width, Height, PF_B8G8R8A8, false);
 		RT->UpdateResourceImmediate(true);
 
 		Cap->TextureTarget = RT;
 		Cap->CaptureSource = ESceneCaptureSource::SCS_FinalColorLDR;
 		Cap->bCaptureEveryFrame = false;
 		Cap->bCaptureOnMovement = false;
-		Cap->FOVAngle = 40.f;
+		Cap->bAlwaysPersistRenderingState = true; // le GDF est mis en cache dans l'état de vue : sans lui, il reste vide
+		Cap->FOVAngle = Fov;
 		Cap->PostProcessSettings.bOverride_AutoExposureMethod = true;
 		Cap->PostProcessSettings.AutoExposureMethod = EAutoExposureMethod::AEM_Manual;
 		Cap->PostProcessSettings.bOverride_AutoExposureBias = true;
-		Cap->PostProcessSettings.AutoExposureBias = 10.f;
+		Cap->PostProcessSettings.AutoExposureBias = ExposureBias;
 		Cap->SetWorldLocationAndRotation(Eye, (Target - Eye).Rotation());
 		Cap->CaptureScene();
 		FlushRenderingCommands();
@@ -369,7 +382,7 @@ bool FCharacterKitProxySymmetryTest::RunTest(const FString& Parameters)
 		return false;
 	}
 	const FCharacterDescription Desc = UCharacterKitLibrary::MakeProxyDescription(Mesh);
-	TestTrue(TEXT("23 pièces : 9 au centre (bassin, 5 vertèbres, 2 cou, tête) + 7 paires (clavicule, bras, avant-bras, main, cuisse, mollet, pied)"), Desc.Parts.Num() == 23);
+	TestTrue(TEXT("35 pièces : 9 au centre (bassin, 5 vertèbres, 2 cou, tête) + 7 paires (clavicule, bras, avant-bras, main, cuisse, mollet, pied) + 6 paires de rotules"), Desc.Parts.Num() == 35);
 
 	// En pose de référence, chaque pièce gauche a sa jumelle droite au miroir du plan X = 0
 	FTestWorld TW;
@@ -401,6 +414,151 @@ bool FCharacterKitProxySymmetryTest::RunTest(const FString& Parameters)
 	}
 	AddInfo(FString::Printf(TEXT("%d pièces, %d paires gauche / droite, écart au miroir max : %.2f cm"), Desc.Parts.Num(), Pairs, MaxMirrorError));
 	TestTrue(TEXT("Symétrie gauche / droite (< 0,5 cm)"), MaxMirrorError < 0.5);
+	return true;
+}
+
+#endif
+
+#if WITH_DEV_AUTOMATION_TESTS
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FCharacterKitBodyRatiosTest, "CharacterKit.Visual.BodyRatios",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FCharacterKitBodyRatiosTest::RunTest(const FString& Parameters)
+{
+	using namespace CharacterKitTestPrivate;
+
+	USkeletalMesh* Mesh = LoadObject<USkeletalMesh>(nullptr, MannequinPath);
+	UAnimSequence* Walk = LoadObject<UAnimSequence>(nullptr, WalkPath);
+	if (!Mesh || !Walk)
+	{
+		AddError(TEXT("Assets de test introuvables"));
+		return false;
+	}
+
+	FTestWorld TW;
+	AddLights(TW.World);
+	const TArray<TPair<FString, FCharacterBodyProfile>> Presets = CharacterBodyProfile::Presets();
+	TArray<USkeletalMeshComponent*> Skels;
+	FString Names;
+	for (int32 i = 0; i < Presets.Num(); ++i)
+	{
+		UCharacterAssemblyComponent* Assembly = nullptr;
+		USkeletalMeshComponent* Skel = nullptr;
+		AActor* Actor = SpawnMannequin(TW, Mesh, Walk, Assembly, Skel);
+		// Rangés de gauche à droite face à la caméra (le mannequin regarde vers +Y)
+		Actor->SetActorLocation(FVector((i - (Presets.Num() - 1) * 0.5) * -95.0, 0, 0));
+		FCharacterDescription D = UCharacterKitLibrary::MakeProxyDescription(Mesh);
+		D.Profile = Presets[i].Value;
+		Assembly->bHideSkeletonMesh = true;
+		Assembly->SetDescription(D);
+		Skels.Add(Skel);
+		Names += Presets[i].Key + TEXT(" ");
+	}
+	AddInfo(FString::Printf(TEXT("De gauche à droite : %s"), *Names));
+
+	// Pose de référence (temps 0) : les pieds doivent toucher le sol quel que soit le profil
+	TW.Tick(1, 0.f);
+	const float RefFoot = Skels[0]->GetSocketLocation(TEXT("foot_l")).Z;
+	for (int32 i = 0; i < Skels.Num(); ++i)
+	{
+		const float Expected = RefFoot * Presets[i].Value.Height;
+		const float Foot = Skels[i]->GetSocketLocation(TEXT("foot_l")).Z;
+		AddInfo(FString::Printf(TEXT("%s : cheville à %.1f cm (attendu %.1f), tête à %.1f cm"), *Presets[i].Key, Foot, Expected,
+			Skels[i]->GetSocketLocation(TEXT("head")).Z));
+		TestTrue(*FString::Printf(TEXT("%s : pieds au sol (< 3 cm)"), *Presets[i].Key), FMath::Abs(Foot - Expected) < 3.f);
+	}
+
+	const FVector Target(0, 0, 90);
+	TestTrue(TEXT("Capture ratios, face"), Capture(TW.World, FVector(0, 720, 120), Target, TEXT("Ratios_front.png"), 1280, 560, 50.f));
+	TW.Tick(8);
+	TestTrue(TEXT("Capture ratios, marche"), Capture(TW.World, FVector(-420, 620, 160), Target, TEXT("Ratios_walk_34.png"), 1280, 560, 50.f));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FCharacterKitJointBlendTest, "CharacterKit.Visual.JointBlend",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FCharacterKitJointBlendTest::RunTest(const FString& Parameters)
+{
+	using namespace CharacterKitTestPrivate;
+
+	USkeletalMesh* Mesh = LoadObject<USkeletalMesh>(nullptr, MannequinPath);
+	UAnimSequence* Walk = LoadObject<UAnimSequence>(nullptr, WalkPath);
+	UMaterialInterface* Debug = LoadObject<UMaterialInterface>(nullptr, TEXT("/Game/_Claude/M_Claude_JointBlendDebug.M_Claude_JointBlendDebug"));
+	if (!Mesh || !Walk)
+	{
+		AddError(TEXT("Assets de test introuvables"));
+		return false;
+	}
+	if (!Debug)
+	{
+		AddWarning(TEXT("M_Claude_JointBlendDebug absent : lancer Tools/RunPython.ps1 Tools/Claude/create_joint_blend_material.py"));
+		return true;
+	}
+
+	FTestWorld TW;
+	AddLights(TW.World);
+	UCharacterAssemblyComponent* Assembly = nullptr;
+	USkeletalMeshComponent* Skel = nullptr;
+	SpawnMannequin(TW, Mesh, Walk, Assembly, Skel);
+
+	// Un matériau dynamique partagé par toutes les pièces : on change de mode entre les captures
+	UMaterialInstanceDynamic* MID = UMaterialInstanceDynamic::Create(Debug, Assembly);
+	FCharacterDescription D = UCharacterKitLibrary::MakeProxyDescription(Mesh);
+	for (FCharacterPart& Part : D.Parts)
+	{
+		Part.Material = MID;
+	}
+	Assembly->bHideSkeletonMesh = true;
+	Assembly->SetDescription(D);
+	// Le shader ne compile qu'au premier rendu (en attendant, Unreal affiche son matériau par défaut, le damier) :
+	// une capture de chauffe, puis on attend la fin de la compilation
+	TW.Tick(12);
+	// Les champs de distance des meshes (MDF) se construisent en arrière-plan : les attendre, sinon le GDF est vide
+	if (GDistanceFieldAsyncQueue)
+	{
+		GDistanceFieldAsyncQueue->BlockUntilAllBuildsComplete();
+	}
+	for (int32 Warm = 0; Warm < 6; ++Warm)
+	{
+		TW.Tick(1, 0.f);
+		Capture(TW.World, FVector(260, 260, 150), FVector(0, 0, 95), TEXT("_warmup.png"));
+		if (GShaderCompilingManager)
+		{
+			GShaderCompilingManager->FinishAllCompilation();
+		}
+	}
+	IFileManager::Get().Delete(*(FPaths::ProjectSavedDir() / TEXT("Automation/CharacterKit/_warmup.png")));
+
+	// Pendant la marche : plusieurs images de suite pour voir si le champ global suit (« reptation »)
+	static const TCHAR* ModeNames[] = { TEXT("hybride"), TEXT("origine"), TEXT("masque"), TEXT("surface") };
+	const FVector Elbow = Skel->GetSocketLocation(TEXT("lowerarm_l"));
+	const FVector Knee = Skel->GetSocketLocation(TEXT("calf_l"));
+	for (int32 Mode = 0; Mode < 4; ++Mode)
+	{
+		MID->SetScalarParameterValue(TEXT("Mode"), Mode);
+		TestTrue(TEXT("Capture corps"), Capture(TW.World, FVector(260, 260, 150), FVector(0, 0, 95), FString::Printf(TEXT("Blend_%d_%s_body.png"), Mode, ModeNames[Mode])));
+		TestTrue(TEXT("Capture coude"), Capture(TW.World, Elbow + FVector(120, 40, 20), Elbow, FString::Printf(TEXT("Blend_%d_%s_elbow.png"), Mode, ModeNames[Mode]), 640, 640, 30.f));
+		TestTrue(TEXT("Capture genou"), Capture(TW.World, Knee + FVector(110, 90, 10), Knee, FString::Printf(TEXT("Blend_%d_%s_knee.png"), Mode, ModeNames[Mode]), 640, 640, 30.f));
+	}
+	// Sonde lointaine plus courte (12 cm au lieu de 40) : à l'échelle d'un bras
+	MID->SetScalarParameterValue(TEXT("R2"), 12.f);
+	for (int32 Mode : { 0, 2 })
+	{
+		MID->SetScalarParameterValue(TEXT("Mode"), Mode);
+		TestTrue(TEXT("Capture coude R2=12"), Capture(TW.World, Elbow + FVector(120, 40, 20), Elbow, FString::Printf(TEXT("Blend_R12_%d_%s_elbow.png"), Mode, ModeNames[Mode]), 640, 640, 30.f));
+		TestTrue(TEXT("Capture corps R2=12"), Capture(TW.World, FVector(260, 260, 150), FVector(0, 0, 95), FString::Printf(TEXT("Blend_R12_%d_%s_body.png"), Mode, ModeNames[Mode])));
+	}
+	MID->SetScalarParameterValue(TEXT("R2"), 40.f);
+
+	// La même vue sur trois images de marche consécutives, masque visible
+	MID->SetScalarParameterValue(TEXT("Mode"), 2);
+	for (int32 Frame = 0; Frame < 3; ++Frame)
+	{
+		TW.Tick(1);
+		TestTrue(TEXT("Capture suivi"), Capture(TW.World, FVector(260, 260, 150), FVector(0, 0, 95), FString::Printf(TEXT("Blend_track_%d.png"), Frame)));
+	}
 	return true;
 }
 
