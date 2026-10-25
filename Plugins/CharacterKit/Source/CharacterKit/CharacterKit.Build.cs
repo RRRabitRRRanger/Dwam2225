@@ -10,7 +10,8 @@ public class CharacterKit : ModuleRules
 		{
 			"Core",
 			"CoreUObject",
-			"Engine"
+			"Engine",
+			"SDFEyesRuntime"
 		});
 
 		// Pour les tests fonctionnels (captures)

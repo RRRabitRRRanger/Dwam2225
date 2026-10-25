@@ -1,6 +1,7 @@
 #include "CharacterAssemblyComponent.h"
 #include "CharacterBodyProfile.h"
 #include "CharacterKitAnimInstance.h"
+#include "SDFEyeComponent.h"
 #include "Components/SkeletalMeshComponent.h"
 #include "Components/StaticMeshComponent.h"
 #include "Engine/StaticMesh.h"
@@ -58,6 +59,15 @@ void UCharacterAssemblyComponent::ClearParts()
 	}
 	PartComponents.Reset();
 	PartSlots.Reset();
+	for (USceneComponent* Anchor : AnchorComponents)
+	{
+		if (IsValid(Anchor))
+		{
+			Anchor->DestroyComponent();
+		}
+	}
+	AnchorComponents.Reset();
+	AnchorNames.Reset();
 }
 
 void UCharacterAssemblyComponent::Assemble()
@@ -112,6 +122,53 @@ void UCharacterAssemblyComponent::Assemble()
 		PartComponents.Add(Comp);
 		PartSlots.Add(Part.Slot);
 	}
+
+	// Ancres : un component par ancre, attaché à son os (les yeux suivent la tête, l'épaule, n'importe quel os)
+	for (const FCharacterAnchor& Anchor : Source->Anchors)
+	{
+		if (Skeleton->GetBoneIndex(Anchor.Bone) == INDEX_NONE)
+		{
+			UE_LOG(LogCharacterKit, Warning, TEXT("%s : os '%s' introuvable pour l'ancre '%s'"),
+				*Owner->GetName(), *Anchor.Bone.ToString(), *Anchor.Name.ToString());
+			continue;
+		}
+		const EObjectFlags Flags = RF_Transient | RF_TextExportTransient | RF_DuplicateTransient;
+		USceneComponent* Comp = nullptr;
+		if (Anchor.Kind == ECharacterAnchorKind::Eye)
+		{
+			USDFEyeComponent* Eye = NewObject<USDFEyeComponent>(Owner, NAME_None, Flags);
+			Eye->Shape = Anchor.EyeShape;
+			Eye->EyeMaterial = EyeMaterial;
+			Eye->GlobeRadius = Anchor.GlobeRadius * CharacterBodyProfile::BonePartFactors(Source->Profile, Anchor.Bone).Y;
+			Eye->bMirror = Anchor.bMirror;
+			Comp = Eye;
+		}
+		else
+		{
+			Comp = NewObject<USceneComponent>(Owner, NAME_None, Flags);
+		}
+		Comp->CreationMethod = EComponentCreationMethod::Instance;
+		Comp->SetMobility(EComponentMobility::Movable);
+		Comp->SetupAttachment(Skeleton, Anchor.Bone);
+		const FTransform Placed = CharacterBodyProfile::ApplyToPartOffset(Source->Profile, Anchor.Bone, Anchor.Offset);
+		Comp->SetRelativeLocationAndRotation(Placed.GetLocation(), Placed.GetRotation());
+		Comp->RegisterComponent();
+		AnchorComponents.Add(Comp);
+		AnchorNames.Add(Anchor.Name);
+	}
+}
+
+USceneComponent* UCharacterAssemblyComponent::GetAnchorComponent(FName Anchor) const
+{
+	const int32 Index = AnchorNames.IndexOfByKey(Anchor);
+	return AnchorComponents.IsValidIndex(Index) ? AnchorComponents[Index].Get() : nullptr;
+}
+
+void UCharacterAssemblyComponent::AddAnchor(const FCharacterAnchor& Anchor)
+{
+	TakeOwnDescription();
+	Description.Anchors.Add(Anchor);
+	Assemble();
 }
 
 const FCharacterDescription* UCharacterAssemblyComponent::GetSource() const

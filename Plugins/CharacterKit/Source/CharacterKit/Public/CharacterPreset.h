@@ -37,6 +37,47 @@ struct CHARACTERKIT_API FCharacterPart
 	bool bIgnoreLength = false;
 };
 
+UENUM(BlueprintType)
+enum class ECharacterAnchorKind : uint8
+{
+	/** Un simple point nommé (attaches de vêtements, armes plantées…). */
+	Point,
+	/** Un œil SDFEyes : regard au repos selon le X local, haut selon le Z local. */
+	Eye
+};
+
+/** Un point nommé posé sur un os : un œil, plus tard une bouche, une attache. Autant qu'on veut, où on veut. */
+USTRUCT(BlueprintType)
+struct CHARACTERKIT_API FCharacterAnchor
+{
+	GENERATED_BODY()
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Anchor")
+	FName Name;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Anchor")
+	FName Bone;
+
+	/** Position et orientation dans le repère de l'os (l'échelle est ignorée pour un œil : voir GlobeRadius). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Anchor")
+	FTransform Offset;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Anchor")
+	ECharacterAnchorKind Kind = ECharacterAnchorKind::Point;
+
+	/** Œil : forme de paupière (vide = défauts). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Anchor|Eye", meta = (EditCondition = "Kind == ECharacterAnchorKind::Eye"))
+	TObjectPtr<class USDFEyeShape> EyeShape;
+
+	/** Œil : rayon du globe en cm. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Anchor|Eye", meta = (EditCondition = "Kind == ECharacterAnchorKind::Eye"))
+	float GlobeRadius = 1.25f;
+
+	/** Œil : nez de l'autre côté. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Anchor|Eye", meta = (EditCondition = "Kind == ECharacterAnchorKind::Eye"))
+	bool bMirror = false;
+};
+
 /**
  * Les proportions du corps, par groupes d'os (1 = le mannequin d'origine).
  * Longueurs : appliquées au squelette (les os s'allongent, les pièces suivent).
@@ -105,6 +146,9 @@ struct CHARACTERKIT_API FCharacterDescription
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Character")
 	FCharacterBodyProfile Profile;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Character", meta = (TitleProperty = "Name"))
+	TArray<FCharacterAnchor> Anchors;
 };
 
 /** Un préréglage : un asset (en lecture seule en jeu) qui contient une description de départ. */

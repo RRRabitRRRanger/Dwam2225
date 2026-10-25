@@ -1,5 +1,6 @@
 ﻿#include "CharacterAssemblyComponent.h"
 #include "CharacterKitLibrary.h"
+#include "SDFEyeComponent.h"
 #include "CharacterKitAnimInstance.h"
 #include "CharacterBodyProfile.h"
 #include "Materials/MaterialInstanceDynamic.h"
@@ -797,6 +798,169 @@ bool FCharacterKitExportProxySpecsTest::RunTest(const FString& Parameters)
 	const FString Path = FPaths::ProjectSavedDir() / TEXT("Automation/CharacterKit_ProxySpecs.json");
 	TestTrue(TEXT("Fichier écrit"), FFileHelper::SaveStringToFile(Json, *Path, FFileHelper::EEncodingOptions::ForceUTF8WithoutBOM));
 	AddInfo(FString::Printf(TEXT("%d pièces -> %s"), D.Parts.Num(), *FPaths::ConvertRelativePathToFull(Path)));
+	return true;
+}
+
+#endif
+
+#if WITH_DEV_AUTOMATION_TESTS
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FCharacterKitEyesTest, "CharacterKit.Visual.Eyes",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FCharacterKitEyesTest::RunTest(const FString& Parameters)
+{
+	using namespace CharacterKitTestPrivate;
+
+	USkeletalMesh* Mesh = LoadObject<USkeletalMesh>(nullptr, MannequinPath);
+	UAnimSequence* Idle = LoadObject<UAnimSequence>(nullptr, TEXT("/Game/Characters/Mannequins/Anims/Unarmed/MM_Idle.MM_Idle"));
+	UMaterialInterface* EyeMat = LoadObject<UMaterialInterface>(nullptr, TEXT("/Game/_Claude/M_Claude_SDFEyes.M_Claude_SDFEyes"));
+	UMaterialInterface* BodyMat = LoadObject<UMaterialInterface>(nullptr, TEXT("/Game/_Claude/M_Claude_JointBlendDebug.M_Claude_JointBlendDebug"));
+	if (!Mesh || !Idle || !EyeMat || !BodyMat)
+	{
+		AddError(TEXT("Assets de test introuvables (lancer Tools/Claude/create_sdfeyes_material.py)"));
+		return false;
+	}
+
+	FTestWorld TW;
+	UStaticMeshComponent* Ground = AddLights(TW.World);
+	UCharacterAssemblyComponent* Assembly = nullptr;
+	USkeletalMeshComponent* Skel = nullptr;
+	SpawnMannequin(TW, Mesh, Idle, Assembly, Skel);
+
+	UMaterialInstanceDynamic* BodyMID = UMaterialInstanceDynamic::Create(BodyMat, Assembly);
+	BodyMID->SetScalarParameterValue(TEXT("Mode"), 1.f);
+	BodyMID->SetScalarParameterValue(TEXT("Cell"), 0.15f);
+	Ground->SetMaterial(0, BodyMID);
+	FCharacterDescription D = UCharacterKitLibrary::MakeProxyDescription(Mesh);
+	UseBakedParts(D);
+	for (FCharacterPart& Part : D.Parts)
+	{
+		Part.Material = BodyMID;
+	}
+	Assembly->EyeMaterial = EyeMat;
+	Assembly->bHideSkeletonMesh = true;
+	Assembly->SetDescription(D);
+
+	// Deux yeux, sur la tête, de nez opposés
+	USDFEyeComponent* EyeA = Cast<USDFEyeComponent>(Assembly->GetAnchorComponent(TEXT("Eye_PosX")));
+	USDFEyeComponent* EyeB = Cast<USDFEyeComponent>(Assembly->GetAnchorComponent(TEXT("Eye_NegX")));
+	if (!TestTrue(TEXT("Deux yeux créés"), EyeA && EyeB))
+	{
+		return false;
+	}
+	TestEqual(TEXT("Yeux attachés à la tête"), EyeA->GetAttachSocketName(), FName(TEXT("head")));
+	TestTrue(TEXT("Nez de côtés opposés (miroir)"), EyeA->bMirror != EyeB->bMirror);
+	for (USDFEyeComponent* Eye : { EyeA, EyeB })
+	{
+		Eye->bMicroLife = false;
+	}
+
+	constexpr float Raw = -1.f;
+	auto Face = [&](const FString& Name, float Distance, const FVector& Side, float Fov = 30.f)
+	{
+		for (USDFEyeComponent* Eye : { EyeA, EyeB })
+		{
+			Eye->UpdateEye();
+		}
+		const FVector Mid = 0.5f * (EyeA->GetComponentLocation() + EyeB->GetComponentLocation());
+		const FVector Fwd = (EyeA->GetForwardVector() + EyeB->GetForwardVector()).GetSafeNormal();
+		const FVector Eye = Mid + (Fwd + Side).GetSafeNormal() * Distance + FVector(0, 0, 1.5f);
+		return Capture(TW.World, Eye, Mid, Name, 640, 480, Fov, Raw);
+	};
+
+	// Chauffe : compilation des shaders au premier rendu
+	TW.Tick(4);
+	for (int32 Warm = 0; Warm < 6; ++Warm)
+	{
+		TW.Tick(1, 0.f);
+		Face(TEXT("_warmup.png"), 30.f, FVector::ZeroVector);
+		if (GShaderCompilingManager)
+		{
+			GShaderCompilingManager->FinishAllCompilation();
+		}
+	}
+	IFileManager::Get().Delete(*(FPaths::ProjectSavedDir() / TEXT("Automation/CharacterKit/_warmup.png")));
+
+	// Visage : ouvert, mi-clos, fermé, regard de côté, trois quarts, profil
+	struct FShot { const TCHAR* Name; float Blink; FVector2D Gaze; FVector Side; float Distance; };
+	const FShot Shots[] =
+	{
+		{ TEXT("Eyes_1_ouverts"), 0.f, FVector2D::ZeroVector, FVector::ZeroVector, 30.f },
+		{ TEXT("Eyes_2_miclos"), 0.5f, FVector2D::ZeroVector, FVector::ZeroVector, 30.f },
+		{ TEXT("Eyes_3_fermes"), 1.f, FVector2D::ZeroVector, FVector::ZeroVector, 30.f },
+		{ TEXT("Eyes_4_regard"), 0.f, FVector2D(0.35f, 0.1f), FVector::ZeroVector, 30.f },
+		{ TEXT("Eyes_5_troisquarts"), 0.f, FVector2D::ZeroVector, FVector(0.9f, 0, 0), 30.f },
+		{ TEXT("Eyes_6_profil"), 0.f, FVector2D::ZeroVector, FVector(3.f, 0, 0), 30.f },
+		{ TEXT("Eyes_7_gros_plan"), 0.f, FVector2D::ZeroVector, FVector(0.3f, 0, 0), 12.f },
+	};
+	for (const FShot& S : Shots)
+	{
+		for (USDFEyeComponent* Eye : { EyeA, EyeB })
+		{
+			Eye->Blink = S.Blink;
+			Eye->Gaze = S.Gaze;
+		}
+		TestTrue(TEXT("Capture visage"), Face(FString(S.Name) + TEXT(".png"), S.Distance, S.Side));
+	}
+
+	// Micro-vie : une suite d'images, pour voir un clignement arriver tout seul
+	for (USDFEyeComponent* Eye : { EyeA, EyeB })
+	{
+		Eye->Blink = 0.f;
+		Eye->Gaze = FVector2D::ZeroVector;
+		Eye->bMicroLife = true;
+	}
+	int32 Blinks = 0;
+	for (int32 F = 0; F < 240; ++F)
+	{
+		for (USDFEyeComponent* Eye : { EyeA, EyeB })
+		{
+			Eye->SetMicroLifeTime(F / 30.0);
+		}
+		EyeA->UpdateEye();
+		float B = 0.f;
+		if (UMaterialInstanceDynamic* M = Cast<UMaterialInstanceDynamic>(EyeA->GetMaterial(0)))
+		{
+			M->GetScalarParameterValue(FName(TEXT("Blink")), B);
+		}
+		Blinks += B > 0.9f ? 1 : 0;
+	}
+	AddInfo(FString::Printf(TEXT("Micro-vie : %d images (sur 240, 8 s) avec l'œil fermé"), Blinks));
+	TestTrue(TEXT("Au moins un clignement en 8 s"), Blinks > 0);
+
+	// Un troisième œil, sur le devant du bras gauche, près de l'épaule : sans toucher à la tête
+	{
+		const FReferenceSkeleton& Ref = Mesh->GetRefSkeleton();
+		auto RefLocation = [&](const TCHAR* Bone)
+		{
+			int32 I = Ref.FindBoneIndex(Bone);
+			FTransform T = FTransform::Identity;
+			while (I != INDEX_NONE)
+			{
+				T = T * Ref.GetRefBonePose()[I];
+				I = Ref.GetParentIndex(I);
+			}
+			return T.GetLocation();
+		};
+		const FVector A = RefLocation(TEXT("upperarm_l")), B = RefLocation(TEXT("lowerarm_l"));
+		const FVector P = FMath::Lerp(A, B, 0.25f) + FVector(0, 5.6f, 0);
+		FCharacterAnchor Third = UCharacterKitLibrary::MakeAnchor(Mesh, TEXT("Eye_Shoulder"), TEXT("upperarm_l"), P, FVector::YAxisVector, FVector::ZAxisVector);
+		Third.GlobeRadius = 1.6f;
+		Assembly->AddAnchor(Third);
+	}
+	USDFEyeComponent* EyeC = Cast<USDFEyeComponent>(Assembly->GetAnchorComponent(TEXT("Eye_Shoulder")));
+	if (TestNotNull(TEXT("Troisième œil créé"), EyeC))
+	{
+		TestEqual(TEXT("Troisième œil sur le bras"), EyeC->GetAttachSocketName(), FName(TEXT("upperarm_l")));
+		EyeC->bMicroLife = false;
+		EyeC->UpdateEye();
+		TW.Tick(1, 0.f);
+		const FVector C = EyeC->GetComponentLocation();
+		Capture(TW.World, C + (EyeC->GetForwardVector() * 1.f + FVector(0.25f, 0, 0.15f)).GetSafeNormal() * 28.f, C, TEXT("Eyes_8_troisieme_oeil.png"), 640, 480, 32.f, Raw);
+		const FVector Chest = Skel->GetSocketLocation(TEXT("spine_05"));
+		Capture(TW.World, Chest + FVector(45, 95, 18), Chest + FVector(0, 0, 8), TEXT("Eyes_9_buste.png"), 640, 480, 40.f, Raw);
+	}
 	return true;
 }
 

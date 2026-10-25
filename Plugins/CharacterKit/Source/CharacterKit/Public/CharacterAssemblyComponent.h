@@ -39,6 +39,10 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Assembly")
 	bool bHideSkeletonMesh = false;
 
+	/** Matériau des yeux posés sur les ancres de type Eye (nœud Custom avec /Plugin/SDFEyes/Eyelids.ush). */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Assembly")
+	TObjectPtr<UMaterialInterface> EyeMaterial;
+
 	/** Recrée toutes les pièces. */
 	UFUNCTION(BlueprintCallable, CallInEditor, Category = "Assembly")
 	void Assemble();
@@ -62,6 +66,14 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Assembly")
 	UStaticMeshComponent* GetPartComponent(FName Slot) const;
 
+	/** Le component créé pour une ancre (un œil : USDFEyeComponent ; un point : USceneComponent). */
+	UFUNCTION(BlueprintPure, Category = "Assembly")
+	USceneComponent* GetAnchorComponent(FName Anchor) const;
+
+	/** Ajoute une ancre à la description propre (copie le préréglage si besoin) et réassemble. */
+	UFUNCTION(BlueprintCallable, Category = "Assembly")
+	void AddAnchor(const FCharacterAnchor& Anchor);
+
 protected:
 	virtual void OnRegister() override;
 	virtual void OnUnregister() override;
@@ -81,4 +93,10 @@ private:
 
 	UPROPERTY(Transient)
 	TArray<FName> PartSlots;
+
+	UPROPERTY(Transient)
+	TArray<TObjectPtr<USceneComponent>> AnchorComponents;
+
+	UPROPERTY(Transient)
+	TArray<FName> AnchorNames;
 };

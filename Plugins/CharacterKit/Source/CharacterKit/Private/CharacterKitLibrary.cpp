@@ -190,5 +190,49 @@ FCharacterDescription UCharacterKitLibrary::MakeProxyDescription(const USkeletal
 			Desc.Parts.Add(Part);
 		}
 	}
+	// Deux yeux sur la tête, posés sur l'ellipsoïde de la pièce de tête (centre : 9 cm au-dessus de l'os, 2 cm en avant ;
+	// demi-axes 8,5 latéral, 10,5 en profondeur, 12 en hauteur), un peu enfoncés pour que les paupières affleurent
+	const int32 HeadIndex = Ref.FindBoneIndex(TEXT("head"));
+	if (HeadIndex != INDEX_NONE)
+	{
+		const FVector HeadCenter = CS[HeadIndex].GetLocation() + FVector(0, 2, 9);
+		constexpr float Lateral = 3.2f, Rise = 0.5f, GlobeRadius = 1.25f;
+		const float Surface = 10.5f * FMath::Sqrt(1.f - FMath::Square(Lateral / 8.5f) - FMath::Square(Rise / 12.f));
+		for (const float Side : { 1.f, -1.f })
+		{
+			const FVector Eye = HeadCenter + FVector(Side * Lateral, Surface - 0.55f * GlobeRadius, Rise);
+			FCharacterAnchor Anchor = MakeAnchor(Mesh, Side > 0 ? TEXT("Eye_PosX") : TEXT("Eye_NegX"), TEXT("head"), Eye, FVector::YAxisVector, FVector::ZAxisVector);
+			Anchor.GlobeRadius = GlobeRadius;
+			Desc.Anchors.Add(Anchor);
+		}
+	}
 	return Desc;
+}
+
+FCharacterAnchor UCharacterKitLibrary::MakeAnchor(const USkeletalMesh* Mesh, FName Name, FName Bone, FVector Location, FVector Forward, FVector Up, ECharacterAnchorKind Kind)
+{
+	FCharacterAnchor Anchor;
+	Anchor.Name = Name;
+	Anchor.Bone = Bone;
+	Anchor.Kind = Kind;
+	if (!Mesh)
+	{
+		return Anchor;
+	}
+	const FReferenceSkeleton& Ref = Mesh->GetRefSkeleton();
+	const int32 BoneIndex = Ref.FindBoneIndex(Bone);
+	if (BoneIndex == INDEX_NONE)
+	{
+		return Anchor;
+	}
+	const TArray<FTransform> CS = CharacterKitProxy::ComponentSpacePose(Ref);
+	const FTransform AnchorCS(FRotationMatrix::MakeFromXZ(Forward, Up).ToQuat(), Location);
+	Anchor.Offset = AnchorCS.GetRelativeTransform(CS[BoneIndex]);
+	Anchor.Offset.SetScale3D(FVector::OneVector);
+
+	// Le nez est du côté -Y local de l'œil (Eyelids.ush). L'œil le met vers le plan X = 0 : miroir si ce n'est pas le cas
+	const FVector LocalY = AnchorCS.GetRotation().GetAxisY();
+	const FVector ToNose = FVector(-FMath::Sign(Location.X), 0, 0);
+	Anchor.bMirror = FVector::DotProduct(ToNose, LocalY) > 0.f;
+	return Anchor;
 }

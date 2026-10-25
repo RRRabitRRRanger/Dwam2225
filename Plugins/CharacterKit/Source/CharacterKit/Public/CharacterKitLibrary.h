@@ -21,4 +21,13 @@ public:
 	 */
 	UFUNCTION(BlueprintCallable, Category = "CharacterKit")
 	static FCharacterDescription MakeProxyDescription(const USkeletalMesh* Mesh);
+
+	/**
+	 * Une ancre posée dans le repère du personnage (pose de référence : le mannequin regarde vers +Y, haut = +Z),
+	 * convertie dans le repère de l'os. Pour un œil : Forward = où il regarde, Up = le haut de l'œil ;
+	 * le côté du nez (miroir) est déduit de la position par rapport au plan X = 0.
+	 */
+	UFUNCTION(BlueprintCallable, Category = "CharacterKit")
+	static FCharacterAnchor MakeAnchor(const USkeletalMesh* Mesh, FName Name, FName Bone, FVector Location, FVector Forward, FVector Up,
+		ECharacterAnchorKind Kind = ECharacterAnchorKind::Eye);
 };
