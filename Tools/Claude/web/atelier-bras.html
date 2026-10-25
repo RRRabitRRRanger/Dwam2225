@@ -1,0 +1,205 @@
+<title>Atelier du bras</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Condensed:wght@400;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout : la vue (ray-march d'un champ de distance) à gauche, les réglages à droite. */
+:root {
+  --bg: #e9e6e1; --panel: #f6f4f0; --fg: #23211e; --muted: #6d6860; --line: #d3cec6;
+  --wood: #b07a45; --view: #2b2a28;
+  --sans: "IBM Plex Sans Condensed", "Arial Narrow", system-ui, sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, "Consolas", monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --bg: #1c1b19; --panel: #24221f; --fg: #ece8e1; --muted: #a39c91; --line: #3a3733; --wood: #d29a62; --view: #121110; color-scheme: dark } }
+:root[data-theme="dark"] { --bg: #1c1b19; --panel: #24221f; --fg: #ece8e1; --muted: #a39c91; --line: #3a3733; --wood: #d29a62; --view: #121110; color-scheme: dark }
+html, body { height: 100%; }
+body { background: var(--bg); color: var(--fg); font-family: var(--sans); font-size: 15px; box-sizing: border-box;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 12px; }
+.app { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 14px; height: 100%; }
+.view { position: relative; background: var(--view); border-radius: 6px; overflow: hidden; min-height: 420px; }
+canvas { display: block; width: 100%; height: 100%; touch-action: none; cursor: grab; }
+.hud { position: absolute; left: 12px; bottom: 10px; font: 12px var(--mono); color: #cfc8bd; pointer-events: none; }
+.panel { background: var(--panel); border: 1px solid var(--line); border-radius: 6px; overflow-y: auto; min-width: 0; }
+.panel section { padding: 12px 14px; border-bottom: 1px solid var(--line); display: grid; gap: 10px; }
+h1 { font-size: 18px; margin: 0; font-weight: 600; }
+h2 { font-size: 11px; margin: 0; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); font-weight: 600; }
+p.note { margin: 0; color: var(--muted); font-size: 13px; line-height: 1.4; }
+.slider { display: grid; grid-template-columns: 1fr 64px; align-items: center; column-gap: 8px; }
+.slider label { font-size: 13px; }
+.slider output { font: 12px var(--mono); text-align: right; color: var(--muted); font-variant-numeric: tabular-nums; }
+.slider input { grid-column: 1 / -1; width: 100%; accent-color: var(--wood); margin: 0; }
+.row { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+.toggle { display: flex; gap: 6px; align-items: center; font-size: 13px; }
+button { font: 600 13px var(--sans); border: 1px solid var(--line); background: transparent; color: var(--fg); padding: 5px 10px; border-radius: 4px; cursor: pointer; }
+button:hover { border-color: var(--wood); }
+.legend { display: grid; grid-template-columns: 14px 1fr; gap: 4px 8px; font-size: 13px; align-items: center; }
+.sw { width: 12px; height: 12px; border-radius: 2px; }
+@media (max-width: 800px) { .app { grid-template-columns: 1fr; height: auto; } .view { height: 60vh; } }
+</style>
+
+<div class="app">
+  <div class="view"><canvas id="c"></canvas><div class="hud">glisser : tourner · molette : zoom</div></div>
+  <div class="panel">
+    <section>
+      <h1>Atelier du bras</h1>
+      <p class="note">Preuve de méthode : chaque muscle est un volume tendu entre son origine et son insertion (sur des os). Le bras est leur réunion douce, en champ de distance. « Saillant » ou « moyen » n'est qu'un curseur.</p>
+    </section>
+    <section>
+      <h2>Corps</h2>
+      <div class="slider"><label for="def">Définition (douceur de la réunion)</label><output id="defO"></output><input type="range" id="def" min="0.15" max="5" step="0.05" value="0.8"></div>
+      <div class="slider"><label for="fat">Graisse</label><output id="fatO"></output><input type="range" id="fat" min="0" max="2.5" step="0.05" value="0.3"></div>
+      <div class="slider"><label for="mass">Volume musculaire</label><output id="massO"></output><input type="range" id="mass" min="0.6" max="1.6" step="0.01" value="1"></div>
+      <div class="row"><button data-p="0.35,0.1,1.35">Sec et musclé</button><button data-p="1.4,0.5,1">Moyen</button><button data-p="2.6,1.8,0.9">Enrobé</button><button data-p="1.2,0.2,0.75">Mince</button></div>
+    </section>
+    <section>
+      <h2>Pose</h2>
+      <div class="slider"><label for="flex">Flexion du coude</label><output id="flexO"></output><input type="range" id="flex" min="0" max="140" step="1" value="35"></div>
+      <div class="slider"><label for="lift">Élévation du bras</label><output id="liftO"></output><input type="range" id="lift" min="0" max="90" step="1" value="10"></div>
+      <p class="note">Le muscle qui raccourcit gonfle (volume conservé) : le biceps quand le coude plie, le triceps quand il s'étend.</p>
+    </section>
+    <section>
+      <h2>Vue</h2>
+      <div class="row">
+        <label class="toggle"><input type="checkbox" id="ids"> Couleur par muscle</label>
+        <label class="toggle"><input type="checkbox" id="bones"> Os seuls</label>
+      </div>
+      <div class="legend" id="legend"></div>
+    </section>
+  </div>
+</div>
+
+<script>
+// ---------- le bras : repère en cm, x = extérieur, y = haut, z = avant ; épaule à l'origine ----------
+const HUMERUS = 30, FOREARM = 26;
+// Os (segments) : humérus, radius, cubitus. Points « H(t, x, z) » sur l'humérus, « F(t, x, z) » sur l'avant-bras (t de 0 à 1).
+// Muscles : origine, insertion, rayon de tendon, rayon du ventre, position du ventre (0..1), couleur.
+const MUSCLES = [
+  { name: "Deltoïde avant",    o: ["S", 0.5, 0.6, 3.2],  i: ["H", .45, 2.2, 1.0],  rt: 1.2, rb: 2.6, at: .3, c: "#d9744f" },
+  { name: "Deltoïde moyen",    o: ["S", 3.2, 0.9, 0.0],  i: ["H", .45, 2.6, 0],   rt: 1.2, rb: 2.8, at: .3, c: "#e08a5c" },
+  { name: "Deltoïde arrière",  o: ["S", 0.5, 0.6, -3.2], i: ["H", .45, 2.2, -1.0], rt: 1.2, rb: 2.5, at: .3, c: "#c2604a" },
+  { name: "Biceps",            o: ["S", 0.5, -1.0, 2.8], i: ["F", .12, .3, 1.2],  rt: .5, rb: 2.7, at: .55, c: "#d65a5a", flexor: true },
+  { name: "Brachial",          o: ["H", .5, 0, 1.6],     i: ["F", .1, 0, .6],     rt: .7, rb: 2.2, at: .55, c: "#b84c4c", flexor: true },
+  { name: "Triceps long",      o: ["S", -0.5, -1.5, -3], i: ["F", -.04, 0, -1.6], rt: .6, rb: 2.6, at: .45, c: "#7a8fc9", extensor: true },
+  { name: "Triceps latéral",   o: ["H", .2, 1.8, -1.5],  i: ["F", -.04, .4, -1.4], rt: .6, rb: 2.3, at: .5, c: "#93a6dc", extensor: true },
+  { name: "Brachio-radial",    o: ["H", .7, 2.4, .6],    i: ["F", .92, 1.3, .7],  rt: .5, rb: 2.3, at: .3, c: "#e2b04f" },
+  { name: "Extenseurs",        o: ["H", .97, 2.6, -.6],  i: ["F", .85, .9, -.9],  rt: .6, rb: 2.2, at: .28, c: "#c9a24a" },
+  { name: "Fléchisseurs",      o: ["H", .97, -2.6, .3],  i: ["F", .85, -.8, .9],  rt: .6, rb: 2.5, at: .28, c: "#8fbf6a" },
+  { name: "Rond pronateur",    o: ["H", .98, -2.4, .8],  i: ["F", .45, 1.0, .9],  rt: .5, rb: 1.6, at: .35, c: "#6fa86a" },
+];
+const BONES = [
+  { a: ["S", 0, 0, 0], b: ["H", 1, 0, 0], r: 1.2 },          // humérus
+  { a: ["S", -2.5, 1.2, 1.5], b: ["S", 3.4, 1.4, 0], r: 1.3 }, // acromion et bout de clavicule : le haut de l'épaule
+  { a: ["H", 1, 3.0, -.3], b: ["H", 1, -3.0, -.3], r: .9 },   // épicondyles
+  { a: ["F", 0, .8, .2], b: ["F", 1, 1.3, .3], r: .75 },       // radius
+  { a: ["F", -.05, -.5, -1.4], b: ["F", 1, -1.2, -.3], r: .75 }, // cubitus (olécrane en arrière)
+  { a: ["F", 1, 0, 0], b: ["F", 1.12, 0, .2], r: 1.6 },       // poignet (amorce de main)
+];
+
+let P = { def: .8, fat: .3, mass: 1, flex: 35, lift: 10 };
+const rad = d => d * Math.PI / 180;
+function rotX(v, a) { const c = Math.cos(a), s = Math.sin(a); return [v[0], v[1] * c - v[2] * s, v[1] * s + v[2] * c]; }
+function rotZ(v, a) { const c = Math.cos(a), s = Math.sin(a); return [v[0] * c - v[1] * s, v[0] * s + v[1] * c, v[2]]; }
+// Un point d'attache : sur l'épaule (S, fixe), l'humérus (H) ou l'avant-bras (F). Pose : élévation (autour de z), flexion (autour de x).
+function point(spec) {
+  const [bone, t, x, z] = spec;
+  let p;
+  if (bone === "S") return [t, x, z];   // épaule : (x, y, z) direct
+  if (bone === "H") p = [x, -HUMERUS * t, z];
+  else { p = rotX([x, -FOREARM * t, z], -rad(P.flex)); p[1] -= HUMERUS; }   // l'avant-bras pivote au coude, vers l'avant
+  return rotZ(p, rad(P.lift));
+}
+function restLength(m) { const s = P.flex, l = P.lift; P.flex = 35; P.lift = 10; const a = point(m.o), b = point(m.i); P.flex = s; P.lift = l; return Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]); }
+MUSCLES.forEach(m => m.L0 = restLength(m));
+
+// ---------- WebGL : ray-march du champ dans un shader plein écran ----------
+const cv = document.getElementById("c"), gl = cv.getContext("webgl");
+const NM = MUSCLES.length, NB = BONES.length;
+const fs = `
+precision highp float;
+uniform vec2 uRes; uniform vec3 uEye, uTarget;
+uniform vec3 uMA[${NM}], uMB[${NM}], uMR[${NM}], uMC[${NM}];
+uniform vec3 uBA[${NB}], uBB[${NB}]; uniform float uBR[${NB}];
+uniform float uDef, uFat, uIds, uBones;
+float smin(float a, float b, float k) { float h = clamp(.5 + .5 * (b - a) / k, 0., 1.); return mix(b, a, h) - k * h * (1. - h); }
+// Muscle : segment a-b, rayon qui gonfle en ventre (position at), avec un profil lisse
+float muscle(vec3 p, vec3 a, vec3 b, vec3 r) {
+  vec3 ab = b - a; float t = clamp(dot(p - a, ab) / dot(ab, ab), 0., 1.);
+  float u = t < r.z ? t / r.z : (1. - t) / (1. - r.z);
+  float bulge = r.x + (r.y - r.x) * sin(1.5707963 * clamp(u, 0., 1.));
+  return (length(p - (a + ab * t)) - bulge) * .8;
+}
+float capsule(vec3 p, vec3 a, vec3 b, float r) { vec3 ab = b - a; float t = clamp(dot(p - a, ab) / dot(ab, ab), 0., 1.); return length(p - (a + ab * t)) - r; }
+vec2 field(vec3 p) {
+  float d = 1e3, id = -1., best = 1e3;
+  for (int i = 0; i < ${NB}; i++) { float b = capsule(p, uBA[i], uBB[i], uBR[i]); d = (i == 0) ? b : smin(d, b, .6); }
+  if (uBones > .5) return vec2(d, -2.);
+  for (int i = 0; i < ${NM}; i++) { float m = muscle(p, uMA[i], uMB[i], uMR[i]); if (m < best) { best = m; id = float(i); } d = smin(d, m, uDef); }
+  // graisse : une couche qui épaissit et adoucit encore
+  d = d - uFat;
+  return vec2(d, id);
+}
+vec3 normal(vec3 p) { vec2 e = vec2(.02, 0); return normalize(vec3(field(p + e.xyy).x - field(p - e.xyy).x, field(p + e.yxy).x - field(p - e.yxy).x, field(p + e.yyx).x - field(p - e.yyx).x)); }
+vec3 idColor(float id) { ${MUSCLES.map((m, i) => `if (id < ${i}.5) return uMC[${i}];`).join(" ")} return vec3(.8); }
+void main() {
+  vec2 uv = (2. * gl_FragCoord.xy - uRes) / uRes.y;
+  vec3 f = normalize(uTarget - uEye), r = normalize(cross(f, vec3(0, 1, 0))), u = cross(r, f);
+  vec3 rd = normalize(f * 2.2 + uv.x * r + uv.y * u), p = uEye; float t = 0.; vec2 h = vec2(1e3, -1);
+  for (int i = 0; i < 140; i++) { h = field(p); if (h.x < .01 || t > 400.) break; t += h.x; p += rd * h.x; }
+  vec3 bg = mix(vec3(.10, .095, .09), vec3(.17, .16, .15), uv.y * .5 + .5);
+  if (h.x > .05) { gl_FragColor = vec4(pow(bg, vec3(.4545)), 1); return; }
+  vec3 n = normal(p), L = normalize(vec3(.5, .7, .6));
+  vec3 alb = uIds > .5 && h.y >= 0. ? idColor(h.y) : (h.y < -1.5 ? vec3(.85, .82, .75) : vec3(.78, .55, .44));
+  float dif = clamp(dot(n, L) * .8 + .2, 0., 1.);
+  float rim = pow(1. - clamp(dot(n, -rd), 0., 1.), 3.) * .25;
+  float ao = clamp(field(p + n * .8).x / .8, 0., 1.);
+  vec3 col = alb * (dif * vec3(1., .96, .9) + vec3(.16, .17, .2) * (.5 + .5 * ao)) + rim;
+  gl_FragColor = vec4(pow(col, vec3(.4545)), 1);
+}`;
+const vs = "attribute vec2 a; void main(){ gl_Position = vec4(a, 0, 1); }";
+function sh(type, src) { const s = gl.createShader(type); gl.shaderSource(s, src); gl.compileShader(s); if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(s)); return s; }
+const prog = gl.createProgram(); gl.attachShader(prog, sh(gl.VERTEX_SHADER, vs)); gl.attachShader(prog, sh(gl.FRAGMENT_SHADER, fs)); gl.linkProgram(prog); gl.useProgram(prog);
+gl.bindBuffer(gl.ARRAY_BUFFER, gl.createBuffer()); gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 3, -1, -1, 3]), gl.STATIC_DRAW);
+const aLoc = gl.getAttribLocation(prog, "a"); gl.enableVertexAttribArray(aLoc); gl.vertexAttribPointer(aLoc, 2, gl.FLOAT, false, 0, 0);
+const U = n => gl.getUniformLocation(prog, n);
+const hex = h => [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16) / 255);
+
+// ---------- caméra en orbite ----------
+let yaw = 1.2, pitch = .1, dist = 100, drag = null;
+const target = [0, -24, 0];
+cv.addEventListener("pointerdown", e => { drag = [e.clientX, e.clientY]; cv.setPointerCapture(e.pointerId); });
+cv.addEventListener("pointermove", e => { if (!drag) return; yaw -= (e.clientX - drag[0]) * .01; pitch = Math.max(-1.3, Math.min(1.3, pitch + (e.clientY - drag[1]) * .01)); drag = [e.clientX, e.clientY]; draw(); });
+cv.addEventListener("pointerup", () => drag = null);
+cv.addEventListener("wheel", e => { e.preventDefault(); dist = Math.max(25, Math.min(200, dist * (1 + e.deltaY * .001))); draw(); }, { passive: false });
+
+function draw() {
+  const w = cv.clientWidth, h = cv.clientHeight, s = Math.min(devicePixelRatio, 1.5);
+  if (cv.width !== Math.round(w * s)) { cv.width = Math.round(w * s); cv.height = Math.round(h * s); }
+  gl.viewport(0, 0, cv.width, cv.height);
+  gl.uniform2f(U("uRes"), cv.width, cv.height);
+  gl.uniform3f(U("uEye"), target[0] + dist * Math.cos(pitch) * Math.sin(yaw), target[1] + dist * Math.sin(pitch), target[2] + dist * Math.cos(pitch) * Math.cos(yaw));
+  gl.uniform3fv(U("uTarget"), target);
+  const A = [], B = [], R = [], C = [];
+  MUSCLES.forEach(m => {
+    const a = point(m.o), b = point(m.i), L = Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]);
+    const swell = Math.sqrt(m.L0 / Math.max(L, 1));   // volume conservé : plus court = plus épais
+    A.push(...a); B.push(...b); R.push(m.rt, m.rb * P.mass * swell, m.at); C.push(...hex(m.c));
+  });
+  gl.uniform3fv(U("uMA"), A); gl.uniform3fv(U("uMB"), B); gl.uniform3fv(U("uMR"), R); gl.uniform3fv(U("uMC"), C);
+  const BA = [], BB = [], BR = [];
+  BONES.forEach(b => { BA.push(...point(b.a)); BB.push(...point(b.b)); BR.push(b.r); });
+  gl.uniform3fv(U("uBA"), BA); gl.uniform3fv(U("uBB"), BB); gl.uniform1fv(U("uBR"), BR);
+  gl.uniform1f(U("uDef"), P.def); gl.uniform1f(U("uFat"), P.fat);
+  gl.uniform1f(U("uIds"), document.getElementById("ids").checked ? 1 : 0);
+  gl.uniform1f(U("uBones"), document.getElementById("bones").checked ? 1 : 0);
+  gl.drawArrays(gl.TRIANGLES, 0, 3);
+}
+
+// ---------- interface ----------
+const fmt = { def: v => v.toFixed(2) + " cm", fat: v => v.toFixed(2) + " cm", mass: v => "× " + v.toFixed(2), flex: v => v + "°", lift: v => v + "°" };
+function sync() { Object.keys(P).forEach(k => { const i = document.getElementById(k); i.value = P[k]; document.getElementById(k + "O").textContent = fmt[k](P[k]); }); }
+Object.keys(P).forEach(k => document.getElementById(k).addEventListener("input", e => { P[k] = +e.target.value; sync(); draw(); }));
+document.querySelectorAll("[data-p]").forEach(b => b.addEventListener("click", () => { const [d, f, m] = b.dataset.p.split(",").map(Number); P.def = d; P.fat = f; P.mass = m; sync(); draw(); }));
+["ids", "bones"].forEach(id => document.getElementById(id).addEventListener("change", draw));
+document.getElementById("legend").innerHTML = MUSCLES.map(m => `<span class="sw" style="background:${m.c}"></span><span>${m.name}</span>`).join("");
+new ResizeObserver(draw).observe(cv);
+sync(); draw();
+</script>
