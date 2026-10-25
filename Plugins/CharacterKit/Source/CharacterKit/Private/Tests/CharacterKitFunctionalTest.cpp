@@ -14,6 +14,7 @@
 #include "Engine/Engine.h"
 #include "Engine/SkeletalMesh.h"
 #include "Engine/StaticMesh.h"
+#include "StaticMeshResources.h"
 #include "Engine/TextureRenderTarget2D.h"
 #include "Engine/World.h"
 #include "GameFramework/Actor.h"
@@ -21,6 +22,7 @@
 #include "ImageUtils.h"
 #include "Misc/AutomationTest.h"
 #include "Misc/Paths.h"
+#include "Misc/FileHelper.h"
 #include "RenderingThread.h"
 #include "TextureResource.h"
 #include "ShaderCompiler.h"
@@ -192,6 +194,27 @@ namespace CharacterKitTestPrivate
 		const bool bOk = FImageUtils::SaveImageByExtension(*(Dir / FileName), View);
 		Rig->Destroy();
 		return bOk;
+	}
+
+	/**
+	 * Remplace les formes du moteur (étirées de façon inégale, d'où un champ de distance faux) par les pièces
+	 * générées à leur vraie taille dans /Game/_Claude/Parts/ (Tools/Claude/create_proxy_parts.py), avec leur MDF.
+	 * Une pièce sans mesh généré garde sa forme d'origine. Renvoie le nombre de pièces remplacées.
+	 */
+	int32 UseBakedParts(FCharacterDescription& D)
+	{
+		int32 Count = 0;
+		for (FCharacterPart& Part : D.Parts)
+		{
+			const FString Path = FString::Printf(TEXT("/Game/_Claude/Parts/SM_%s.SM_%s"), *Part.Slot.ToString(), *Part.Slot.ToString());
+			if (UStaticMesh* Baked = LoadObject<UStaticMesh>(nullptr, *Path, nullptr, LOAD_NoWarn | LOAD_Quiet))
+			{
+				Part.Mesh = Baked;
+				Part.Offset.SetScale3D(FVector::OneVector);
+				++Count;
+			}
+		}
+		return Count;
 	}
 
 	UStaticMeshComponent* AddLights(UWorld* World)
@@ -560,28 +583,52 @@ bool FCharacterKitJointBlendTest::RunTest(const FString& Parameters)
 	GroundMID->SetScalarParameterValue(TEXT("Cell"), 1.2f);
 	Ground->SetMaterial(0, GroundMID);
 
-	// Bonhomme × 2,5 (idée de l'auteur) : le GDF a la même finesse en cm, donc relativement 2,5 fois plus fine.
-	// Sondes à l'échelle (5 et 12 cm × 2,5).
-	Skel->GetOwner()->SetActorScale3D(FVector(2.5f));
-	MID->SetScalarParameterValue(TEXT("R1"), 12.5f);
-	MID->SetScalarParameterValue(TEXT("R2"), 30.f);
-	MID->SetScalarParameterValue(TEXT("Cell"), 0.35f);
-	for (int32 Warm = 0; Warm < 4; ++Warm)
+	// Pièces générées à leur vraie taille, avec MDF (fortes de l'expérience des deux sphères)
 	{
-		TW.Tick(1, 0.f);
-		Capture(TW.World, FVector(650, 650, 375), FVector(0, 0, 240), TEXT("_warmup.png"), 640, 640, 40.f, Raw);
+		FCharacterDescription Baked = Assembly->GetCurrentDescription();
+		const int32 Replaced = UseBakedParts(Baked);
+		int32 WithMDF = 0;
+		for (const FCharacterPart& Part : Baked.Parts)
+		{
+			const FStaticMeshRenderData* RD = Part.Mesh ? Part.Mesh->GetRenderData() : nullptr;
+			WithMDF += (RD && RD->LODResources.Num() && RD->LODResources[0].DistanceFieldData) ? 1 : 0;
+		}
+		AddInfo(FString::Printf(TEXT("Pièces générées : %d / %d ; avec MDF : %d"), Replaced, Baked.Parts.Num(), WithMDF));
+		TestTrue(TEXT("Pièces générées présentes (Tools/Claude/create_proxy_parts.py)"), Replaced > 0);
+		Assembly->SetDescription(Baked);
+		if (GDistanceFieldAsyncQueue)
+		{
+			GDistanceFieldAsyncQueue->BlockUntilAllBuildsComplete();
+		}
 	}
-	IFileManager::Get().Delete(*(FPaths::ProjectSavedDir() / TEXT("Automation/CharacterKit/_warmup.png")));
 
-	// Haut du corps (buste, bras) et bas du corps (bassin, jambes), en trois quarts face, pour chaque mode
-	const FVector Upper(0, 0, 330), Lower(0, 0, 120);
-	for (int32 Mode : { 1, 0, 3, 2, 4 })
+	// À réglages égaux : même distance D pour toutes les méthodes, part de base nulle pour l'hybride
+	MID->SetScalarParameterValue(TEXT("BaseBlend"), 0.f);
+	MID->SetScalarParameterValue(TEXT("Cell"), 0.35f);
+	struct FMethod { const TCHAR* Tag; float Mode; };
+	const FMethod Methods[] = { { TEXT("1origine"), 1.f }, { TEXT("2auteur"), 3.f }, { TEXT("3champ"), 6.f }, { TEXT("4hybride"), 0.f } };
+	auto Shoot = [&](float Scale, float D, const FString& Tag)
 	{
-		MID->SetScalarParameterValue(TEXT("Mode"), Mode);
-		const FString M = FString::Printf(TEXT("Mode%d_%s"), Mode, ModeNames[Mode]);
-		TestTrue(TEXT("Capture haut"), Capture(TW.World, Upper + FVector(260, 260, 40), Upper, M + TEXT("_haut.png"), 640, 640, 40.f, Raw));
-		TestTrue(TEXT("Capture bas"), Capture(TW.World, Lower + FVector(280, 280, 30), Lower, M + TEXT("_bas.png"), 640, 640, 40.f, Raw));
-	}
+		Skel->GetOwner()->SetActorScale3D(FVector(Scale));
+		MID->SetScalarParameterValue(TEXT("AuthorDist"), D);
+		MID->SetScalarParameterValue(TEXT("R1"), D);
+		MID->SetScalarParameterValue(TEXT("R2"), D + 2.f);
+		for (int32 Warm = 0; Warm < 3; ++Warm)
+		{
+			TW.Tick(1, 0.f);
+			Capture(TW.World, FVector(260, 260, 150) * Scale, FVector(0, 0, 95) * Scale, TEXT("_warmup.png"), 320, 320, 40.f, Raw);
+		}
+		const FVector Upper(0, 0, 132 * Scale), Lower(0, 0, 48 * Scale);
+		for (const FMethod& M : Methods)
+		{
+			MID->SetScalarParameterValue(TEXT("Mode"), M.Mode);
+			Capture(TW.World, Upper + FVector(104, 104, 16) * Scale, Upper, FString::Printf(TEXT("%s_haut_%s.png"), *Tag, M.Tag), 640, 640, 40.f, Raw);
+			Capture(TW.World, Lower + FVector(112, 112, 12) * Scale, Lower, FString::Printf(TEXT("%s_bas_%s.png"), *Tag, M.Tag), 640, 640, 40.f, Raw);
+		}
+	};
+	Shoot(1.f, 10.f, TEXT("Baked_S1"));
+	Shoot(2.5f, 10.f, TEXT("Baked_S25"));
+	IFileManager::Get().Delete(*(FPaths::ProjectSavedDir() / TEXT("Automation/CharacterKit/_warmup.png")));
 	return true;
 }
 
@@ -716,6 +763,39 @@ bool FCharacterKitTwoSpheresTest::RunTest(const FString& Parameters)
 		MID->SetScalarParameterValue(TEXT("Mode"), Mode);
 		Capture(TW.World, FVector(-40, 330, 230), FVector(-20, 0, 150), FString::Printf(TEXT("Spheres_zoom_%d_%s.png"), Mode, ModeNames[Mode]), 640, 480, 40.f, Raw);
 	}
+	return true;
+}
+
+#endif
+
+#if WITH_DEV_AUTOMATION_TESTS
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FCharacterKitExportProxySpecsTest, "CharacterKit.Export.ProxySpecs",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FCharacterKitExportProxySpecsTest::RunTest(const FString& Parameters)
+{
+	using namespace CharacterKitTestPrivate;
+
+	// Écrit la forme et la taille (cm) de chaque pièce du mannequin, pour que le script Python génère les meshes
+	USkeletalMesh* Mesh = LoadObject<USkeletalMesh>(nullptr, MannequinPath);
+	if (!TestNotNull(TEXT("Mannequin chargé"), Mesh))
+	{
+		return false;
+	}
+	const FCharacterDescription D = UCharacterKitLibrary::MakeProxyDescription(Mesh);
+	FString Json = TEXT("[\n");
+	for (int32 i = 0; i < D.Parts.Num(); ++i)
+	{
+		const FCharacterPart& P = D.Parts[i];
+		const FVector Size = P.Offset.GetScale3D() * 100.0;
+		Json += FString::Printf(TEXT("  {\"slot\": \"%s\", \"shape\": \"%s\", \"x\": %.3f, \"y\": %.3f, \"z\": %.3f}%s\n"),
+			*P.Slot.ToString(), P.Mesh ? *P.Mesh->GetName() : TEXT(""), Size.X, Size.Y, Size.Z, i + 1 < D.Parts.Num() ? TEXT(",") : TEXT(""));
+	}
+	Json += TEXT("]\n");
+	const FString Path = FPaths::ProjectSavedDir() / TEXT("Automation/CharacterKit_ProxySpecs.json");
+	TestTrue(TEXT("Fichier écrit"), FFileHelper::SaveStringToFile(Json, *Path, FFileHelper::EEncodingOptions::ForceUTF8WithoutBOM));
+	AddInfo(FString::Printf(TEXT("%d pièces -> %s"), D.Parts.Num(), *FPaths::ConvertRelativePathToFull(Path)));
 	return true;
 }
 
