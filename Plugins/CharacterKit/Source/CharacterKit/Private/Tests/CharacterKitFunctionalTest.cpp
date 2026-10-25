@@ -140,12 +140,15 @@ namespace CharacterKitTestPrivate
 		Rig->SetRootComponent(Cap);
 		Cap->RegisterComponent();
 
+		// Image brute : couleur de la scène AVANT le post-process d'Unreal (ni exposition ni courbe de tons),
+		// encodée en sRGB ici. C'est ce que donne un matériau unlit qui calcule sa propre lumière.
+		const bool bRaw = ExposureBias < 0.f;
 		UTextureRenderTarget2D* RT = NewObject<UTextureRenderTarget2D>(Rig);
-		RT->InitCustomFormat(Width, Height, PF_B8G8R8A8, false);
+		RT->InitCustomFormat(Width, Height, bRaw ? PF_FloatRGBA : PF_B8G8R8A8, !bRaw);
 		RT->UpdateResourceImmediate(true);
 
 		Cap->TextureTarget = RT;
-		Cap->CaptureSource = ESceneCaptureSource::SCS_FinalColorLDR;
+		Cap->CaptureSource = bRaw ? ESceneCaptureSource::SCS_SceneColorHDR : ESceneCaptureSource::SCS_FinalColorLDR;
 		Cap->bCaptureEveryFrame = false;
 		Cap->bCaptureOnMovement = false;
 		Cap->bAlwaysPersistRenderingState = true; // le GDF est mis en cache dans l'état de vue : sans lui, il reste vide
@@ -160,7 +163,21 @@ namespace CharacterKitTestPrivate
 
 		TArray<FColor> Pixels;
 		FTextureRenderTargetResource* Res = RT->GameThread_GetRenderTargetResource();
-		if (!Res || !Res->ReadPixels(Pixels))
+		if (bRaw)
+		{
+			TArray<FLinearColor> Linear;
+			if (!Res || !Res->ReadLinearColorPixels(Linear, FReadSurfaceDataFlags(RCM_MinMax)))
+			{
+				Rig->Destroy();
+				return false;
+			}
+			Pixels.Reserve(Linear.Num());
+			for (const FLinearColor& L : Linear)
+			{
+				Pixels.Add(FLinearColor(L.R, L.G, L.B, 1.f).ToFColorSRGB());
+			}
+		}
+		else if (!Res || !Res->ReadPixels(Pixels))
 		{
 			Rig->Destroy();
 			return false;
@@ -531,34 +548,41 @@ bool FCharacterKitJointBlendTest::RunTest(const FString& Parameters)
 	}
 	IFileManager::Get().Delete(*(FPaths::ProjectSavedDir() / TEXT("Automation/CharacterKit/_warmup.png")));
 
-	// Pendant la marche : plusieurs images de suite pour voir si le champ global suit (« reptation »)
-	static const TCHAR* ModeNames[] = { TEXT("hybride"), TEXT("origine"), TEXT("masque"), TEXT("surface") };
-	const FVector Elbow = Skel->GetSocketLocation(TEXT("lowerarm_l"));
-	const FVector Knee = Skel->GetSocketLocation(TEXT("calf_l"));
-	for (int32 Mode = 0; Mode < 4; ++Mode)
+	// Image brute (sans post-process d'Unreal), éclairage calculé dans le matériau. Exposition < 0 = capture brute.
+	constexpr float Raw = -1.f;
+	static const TCHAR* ModeNames[] = { TEXT("hybride"), TEXT("origine"), TEXT("masque"), TEXT("surface"), TEXT("jonctions") };
+	auto Shoot = [&](float Scale, const FString& Tag)
 	{
-		MID->SetScalarParameterValue(TEXT("Mode"), Mode);
-		TestTrue(TEXT("Capture corps"), Capture(TW.World, FVector(260, 260, 150), FVector(0, 0, 95), FString::Printf(TEXT("Blend_%d_%s_body.png"), Mode, ModeNames[Mode])));
-		TestTrue(TEXT("Capture coude"), Capture(TW.World, Elbow + FVector(120, 40, 20), Elbow, FString::Printf(TEXT("Blend_%d_%s_elbow.png"), Mode, ModeNames[Mode]), 640, 640, 30.f));
-		TestTrue(TEXT("Capture genou"), Capture(TW.World, Knee + FVector(110, 90, 10), Knee, FString::Printf(TEXT("Blend_%d_%s_knee.png"), Mode, ModeNames[Mode]), 640, 640, 30.f));
-	}
-	// Sonde lointaine plus courte (12 cm au lieu de 40) : à l'échelle d'un bras
-	MID->SetScalarParameterValue(TEXT("R2"), 12.f);
-	for (int32 Mode : { 0, 2 })
-	{
-		MID->SetScalarParameterValue(TEXT("Mode"), Mode);
-		TestTrue(TEXT("Capture coude R2=12"), Capture(TW.World, Elbow + FVector(120, 40, 20), Elbow, FString::Printf(TEXT("Blend_R12_%d_%s_elbow.png"), Mode, ModeNames[Mode]), 640, 640, 30.f));
-		TestTrue(TEXT("Capture corps R2=12"), Capture(TW.World, FVector(260, 260, 150), FVector(0, 0, 95), FString::Printf(TEXT("Blend_R12_%d_%s_body.png"), Mode, ModeNames[Mode])));
-	}
-	MID->SetScalarParameterValue(TEXT("R2"), 40.f);
+		const FVector Elbow = Skel->GetSocketLocation(TEXT("lowerarm_l"));
+		const FVector Knee = Skel->GetSocketLocation(TEXT("calf_l"));
+		const FVector Mid(0, 0, 95 * Scale);
+		for (int32 Mode : { 1, 0, 3, 2, 4 })
+		{
+			MID->SetScalarParameterValue(TEXT("Mode"), Mode);
+			const FString M = FString::Printf(TEXT("%s_%d_%s"), *Tag, Mode, ModeNames[Mode]);
+			TestTrue(TEXT("Capture corps"), Capture(TW.World, FVector(260, 260, 150) * Scale, Mid, M + TEXT("_body.png"), 640, 640, 40.f, Raw));
+			TestTrue(TEXT("Capture coude"), Capture(TW.World, Elbow + FVector(120, 40, 20) * Scale, Elbow, M + TEXT("_elbow.png"), 640, 640, 30.f, Raw));
+			TestTrue(TEXT("Capture genou"), Capture(TW.World, Knee + FVector(110, 90, 10) * Scale, Knee, M + TEXT("_knee.png"), 640, 640, 30.f, Raw));
+		}
+	};
 
-	// La même vue sur trois images de marche consécutives, masque visible
-	MID->SetScalarParameterValue(TEXT("Mode"), 2);
-	for (int32 Frame = 0; Frame < 3; ++Frame)
+	// Taille normale, sonde lointaine à 12 cm (à l'échelle d'un bras)
+	MID->SetScalarParameterValue(TEXT("R2"), 12.f);
+	Shoot(1.f, TEXT("S1"));
+
+	// Bonhomme × 2,5 (idée de l'auteur) : le GDF a la même finesse en cm, donc 2,5 fois plus fine relativement.
+	// Sondes à l'échelle (5 et 12 cm × 2,5)
+	Skel->GetOwner()->SetActorScale3D(FVector(2.5f));
+	MID->SetScalarParameterValue(TEXT("R1"), 12.5f);
+	MID->SetScalarParameterValue(TEXT("R2"), 30.f);
+	MID->SetScalarParameterValue(TEXT("Cell"), 15.f);
+	for (int32 Warm = 0; Warm < 4; ++Warm)
 	{
-		TW.Tick(1);
-		TestTrue(TEXT("Capture suivi"), Capture(TW.World, FVector(260, 260, 150), FVector(0, 0, 95), FString::Printf(TEXT("Blend_track_%d.png"), Frame)));
+		TW.Tick(1, 0.f);
+		Capture(TW.World, FVector(650, 650, 375), FVector(0, 0, 240), TEXT("_warmup.png"), 640, 640, 40.f, Raw);
 	}
+	IFileManager::Get().Delete(*(FPaths::ProjectSavedDir() / TEXT("Automation/CharacterKit/_warmup.png")));
+	Shoot(2.5f, TEXT("S25"));
 	return true;
 }
 

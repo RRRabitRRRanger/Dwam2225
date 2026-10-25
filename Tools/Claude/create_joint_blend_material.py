@@ -6,6 +6,8 @@
 #   1 = normale d'origine du mesh (sans mélange)                    -> pour comparer
 #   2 = variante hybride + masque du mélange en orange              -> où et combien ça mélange
 #   3 = variante « surface » (méthode MF_Light2 de l'auteur)        -> gradient du GDF à la surface
+#   4 = jonctions seules (rouge = une autre pièce est à moins de R1 ou R2)
+# Albédo beige + XOR filtré (Patterns.ush) ; soleil maison calculé dans le shader (SunDir).
 # Éclairage simple et fixe (unlit), pour juger la forme et pas la lumière.
 
 import unreal
@@ -43,6 +45,10 @@ r2 = scalar("R2", 40.0, -1400, 520)
 base = scalar("BaseBlend", 0.3, -1400, 640)
 alpha = scalar("SurfaceAlpha", 0.5, -1400, 760)
 mode = scalar("Mode", 0.0, -1400, 880)
+sun = node(unreal.MaterialExpressionVectorParameter, -1400, 1000)
+sun.set_editor_property("parameter_name", "SunDir")
+sun.set_editor_property("default_value", unreal.LinearColor(0.45, 0.55, 0.7, 0.0))
+cell = scalar("Cell", 6.0, -1400, 1120)
 
 
 def probe(radius, y):
@@ -68,8 +74,8 @@ link(wp, "", g0, "Position")
 custom = node(unreal.MaterialExpressionCustom, -400, 300)
 custom.set_editor_property("output_type", unreal.CustomMaterialOutputType.CMOT_FLOAT3)
 custom.set_editor_property("description", "ClaudeJointBlendDebug")
-custom.set_editor_property("include_file_paths", ["/Plugin/DwamLighting/NormalTransfer.ush"])
-names = ["N", "R1", "D1", "G1", "R2", "D2", "G2", "G0", "BaseBlend", "SurfaceAlpha", "Mode"]
+custom.set_editor_property("include_file_paths", ["/Plugin/DwamLighting/NormalTransfer.ush", "/Plugin/DwamLighting/Patterns.ush"])
+names = ["N", "R1", "D1", "G1", "R2", "D2", "G2", "G0", "BaseBlend", "SurfaceAlpha", "Mode", "WP", "SunDir", "Cell"]
 inputs = []
 for n in names:
     ci = unreal.CustomInput()
@@ -82,16 +88,29 @@ float Mask;
 float3 Hyb = DwamNormalTransferHybrid(Nn, R1, D1, G1, R2, D2, G2, BaseBlend, 1.0, 0.5, float3(0, 0, 1), 0.8, Mask);
 float3 Surf = DwamNormalTransferSurface(Nn, G0, SurfaceAlpha);
 float3 NS = Mode < 0.5 ? Hyb : (Mode < 1.5 ? Nn : (Mode < 2.5 ? Hyb : Surf));
-float3 L = normalize(float3(0.5, 0.6, 0.62));
-float Sh = 0.16 + 0.84 * saturate(dot(NS, L));
-float3 C = float3(0.62, 0.6, 0.58) * Sh;
+// Albédo : beige, avec le XOR filtré de Quilez projeté sur le plan le plus face à la normale du mesh (lit les formes)
+float3 An = abs(Nn);
+float2 UV = (An.z > An.x && An.z > An.y) ? WP.xy : ((An.x > An.y) ? WP.yz : WP.xz);
+float X = DwamFilteredXorAuto(UV / Cell);
+float3 Albedo = float3(0.72, 0.66, 0.56) * lerp(0.82, 1.0, X);
+// Soleil maison dans le shader (unlit) : diffus + ciel, terminateur doux
+float3 L = normalize(SunDir.xyz);
+float Ndl = saturate(dot(NS, L) * 0.85 + 0.15);
+float3 C = Albedo * (float3(1.0, 0.96, 0.9) * Ndl + float3(0.16, 0.18, 0.22));
 if (Mode > 1.5 && Mode < 2.5)
 {
-    C = lerp(C, float3(1.0, 0.35, 0.05) * (0.35 + 0.65 * Sh), saturate(Mask));
+    C = lerp(C, float3(1.0, 0.35, 0.05) * (0.35 + 0.65 * Ndl), saturate(Mask));
+}
+if (Mode > 3.5)
+{
+    // Jonctions seules : rouge là où la sonde proche voit une autre pièce, sans la part de base ni les garde-fous
+    float J = saturate(1.0 - D1 / max(R1, 0.01));
+    float J2 = saturate(1.0 - D2 / max(R2, 0.01));
+    C = lerp(float3(0.5, 0.5, 0.5) * (0.4 + 0.6 * Ndl), float3(0.9, 0.1, 0.05), max(J, J2 * 0.5));
 }
 return C;
 """)
-for n, src in zip(names, [vn, r1, d1, g1, r2, d2, g2, g0, base, alpha, mode]):
+for n, src in zip(names, [vn, r1, d1, g1, r2, d2, g2, g0, base, alpha, mode, wp, sun, cell]):
     link(src, "", custom, n)
 
 MEL.connect_material_property(custom, "", unreal.MaterialProperty.MP_EMISSIVE_COLOR)
