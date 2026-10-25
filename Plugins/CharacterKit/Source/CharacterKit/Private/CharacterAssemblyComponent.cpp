@@ -118,6 +118,8 @@ void UCharacterAssemblyComponent::Assemble()
 		Comp->SetupAttachment(Skeleton, Part.Bone);
 		Comp->SetRelativeTransform(CharacterBodyProfile::ApplyToPartOffset(Source->Profile, Part.Bone, Part.Offset, Part.bIgnoreLength));
 		Comp->RegisterComponent();
+		// Largeur du fondu des jointures, à l'échelle du corps (Custom Primitive Data 0, lue par le matériau de corps)
+		Comp->SetCustomPrimitiveDataFloat(0, Source->Profile.JointBlendDistance * Source->Profile.Height * Skeleton->GetComponentScale().X);
 
 		PartComponents.Add(Comp);
 		PartSlots.Add(Part.Slot);

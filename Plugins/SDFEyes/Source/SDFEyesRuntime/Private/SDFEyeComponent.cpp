@@ -92,6 +92,15 @@ void USDFEyeComponent::UpdateEye()
 {
 	using namespace SDFEyePrivate;
 
+	// La sphère support : rayon du globe × 1,2, échelle propre (indépendante du parent). Toujours, même sans matériau.
+	const float SupportScale = GlobeRadius * SupportRatio / SphereRadius;
+	if (!GetRelativeScale3D().Equals(FVector(SupportScale)))
+	{
+		SetRelativeScale3D(FVector(SupportScale));
+	}
+
+	// Sans matériau d'œil, la sphère resterait une boule grise : on la cache
+	SetVisibility(EyeMaterial != nullptr);
 	if (!EyeMaterial)
 	{
 		return;
@@ -101,11 +110,6 @@ void USDFEyeComponent::UpdateEye()
 		MID = UMaterialInstanceDynamic::Create(EyeMaterial, this);
 		SetMaterial(0, MID);
 	}
-
-	// La sphère support : rayon du globe × 1,2, échelle propre (indépendante du parent)
-	const float SupportScale = GlobeRadius * SupportRatio / SphereRadius;
-	SetRelativeScale3D_Direct(FVector(SupportScale));
-	UpdateComponentToWorld();
 
 	const FSDFEyeShapeSettings& S = Shape ? Shape->Settings : ShapeOverride;
 	float B = Blink;

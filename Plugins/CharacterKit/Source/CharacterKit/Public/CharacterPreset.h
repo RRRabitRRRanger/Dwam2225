@@ -129,6 +129,14 @@ struct CHARACTERKIT_API FCharacterBodyProfile
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Body|Width", meta = (ClampMin = "0.3", ClampMax = "3"))
 	float LegThickness = 1.f;
+
+	/**
+	 * Largeur du fondu des jointures (transfert de normales), en cm, pour un corps de taille 1.
+	 * Multipliée par la taille du personnage (Height × échelle de l'acteur) et envoyée à chaque pièce
+	 * en Custom Primitive Data, index 0 (essais du 2026-10-25 : le fondu doit suivre la taille du corps).
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Body|Joints", meta = (ClampMin = "1", ClampMax = "60"))
+	float JointBlendDistance = 10.f;
 };
 
 /**

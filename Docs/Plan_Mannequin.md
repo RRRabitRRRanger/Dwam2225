@@ -131,3 +131,10 @@ Pour un futur générateur de pièces « plus guidé » que les capsules (M7), �
 - **Topologie de main par doigt** (couleurs par phalange, paume, pouce à part) : une pièce par phalange, comme prévu.
 - **Muscles du bras, de la jambe, de l'épaule, de la cuisse** (avec repères numérotés) : les volumes à suivre pour des pièces de membres galbées au lieu de capsules droites.
 - **Planches TACO** : le pouce construit en prisme triangulaire, l'intérieur de la cuisse plus saillant (coupe en goutte, pas en cercle), la ligne de hanche selon le genre, le pli de la taille entre côtes et bassin, la taille des ongles (moitié de la dernière phalange ; pouce le plus grand, auriculaire le plus petit), la forme du nez qui reprend celle du visage.
+
+## M4 — Jointures branchées (2026-10-25, ✔ vérifié par Claude, captures)
+
+- **Matériau de corps** `Content/_Claude/M_Claude_Body` (généré par `Tools/Claude/create_body_material.py`) : la méthode de l'auteur (`MF_Light2`, trois sondes → pseudo-AO → `lerp(gradient, normale, AO)`) en permanence, plus le **rejet du sol** de la variante hybride, et le garde-fou « ne jamais retourner la normale ». Éclairage provisoire dans le shader en attendant l'éclairage maison. Paramètre `DebugBlend` pour voir le fondu en orange.
+- **La largeur du fondu suit la taille** : `FCharacterBodyProfile::JointBlendDistance` (10 cm pour un corps de taille 1) × `Height` × échelle de l'acteur, envoyée par le component à chaque pièce en **Custom Primitive Data 0**. Vérifié par le test `CharacterKit.Visual.BodyJoints` : Enfant 6,2 cm, Standard 10, Grand 12,5, Standard × 2,5 → 25.
+- **Limite vue** : sur le géant (25 cm), presque tout le corps est dans le fondu, parce que le champ global d'Unreal est tronqué au-delà d'une dizaine de centimètres (mesuré sur les deux sphères) : la distance lue plafonne et la pseudo-AO croit qu'une pièce est proche partout. Le rendu reste propre, mais le fondu y est moins sélectif. Le bas des pieds garde un peu de fondu malgré le rejet du sol.
+- Correction annexe : un œil sans matériau restait une sphère d'un mètre (il sortait avant de régler sa taille) ; il est maintenant caché et à la bonne taille.

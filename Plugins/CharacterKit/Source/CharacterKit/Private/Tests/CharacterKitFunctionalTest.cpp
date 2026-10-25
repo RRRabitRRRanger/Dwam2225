@@ -973,3 +973,115 @@ bool FCharacterKitEyesTest::RunTest(const FString& Parameters)
 }
 
 #endif
+
+#if WITH_DEV_AUTOMATION_TESTS
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FCharacterKitBodyJointsTest, "CharacterKit.Visual.BodyJoints",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FCharacterKitBodyJointsTest::RunTest(const FString& Parameters)
+{
+	using namespace CharacterKitTestPrivate;
+
+	// M4 : le matériau de corps fond les jointures en permanence ; la largeur du fondu suit la taille du corps,
+	// réglée par le component (Custom Primitive Data 0), sans réglage à la main.
+	USkeletalMesh* Mesh = LoadObject<USkeletalMesh>(nullptr, MannequinPath);
+	UAnimSequence* Walk = LoadObject<UAnimSequence>(nullptr, WalkPath);
+	UMaterialInterface* BodyMat = LoadObject<UMaterialInterface>(nullptr, TEXT("/Game/_Claude/M_Claude_Body.M_Claude_Body"));
+	UMaterialInterface* PlainMat = LoadObject<UMaterialInterface>(nullptr, TEXT("/Game/_Claude/M_Claude_JointBlendDebug.M_Claude_JointBlendDebug"));
+	if (!Mesh || !Walk || !BodyMat || !PlainMat)
+	{
+		AddError(TEXT("Assets de test introuvables (lancer Tools/Claude/create_body_material.py)"));
+		return false;
+	}
+	constexpr float Raw = -1.f;
+
+	struct FWho { const TCHAR* Preset; float Scale; };
+	auto Scene = [&](const TArray<FWho>& Who, const FString& Tag, const FVector& Eye, const FVector& Target, float Fov)
+	{
+		FTestWorld TW;
+		UStaticMeshComponent* Ground = AddLights(TW.World);
+		UMaterialInstanceDynamic* BodyMID = UMaterialInstanceDynamic::Create(BodyMat, Ground);
+		UMaterialInstanceDynamic* PlainMID = UMaterialInstanceDynamic::Create(PlainMat, Ground);
+		PlainMID->SetScalarParameterValue(TEXT("Mode"), 1.f);
+		PlainMID->SetScalarParameterValue(TEXT("Cell"), 0.35f);
+		UMaterialInstanceDynamic* GroundMID = UMaterialInstanceDynamic::Create(PlainMat, Ground);
+		GroundMID->SetScalarParameterValue(TEXT("Mode"), 1.f);
+		GroundMID->SetScalarParameterValue(TEXT("Cell"), 1.2f);
+		Ground->SetMaterial(0, GroundMID);
+
+		const TArray<TPair<FString, FCharacterBodyProfile>> Presets = CharacterBodyProfile::Presets();
+		TArray<UCharacterAssemblyComponent*> Assemblies;
+		TArray<FCharacterDescription> Descs;
+		for (int32 i = 0; i < Who.Num(); ++i)
+		{
+			UCharacterAssemblyComponent* Assembly = nullptr;
+			USkeletalMeshComponent* Skel = nullptr;
+			AActor* Actor = SpawnMannequin(TW, Mesh, Walk, Assembly, Skel);
+			Actor->SetActorLocation(FVector((i - (Who.Num() - 1) * 0.5) * -110.0, 0, 0));
+			Actor->SetActorScale3D(FVector(Who[i].Scale));
+			FCharacterDescription D = UCharacterKitLibrary::MakeProxyDescription(Mesh);
+			UseBakedParts(D);
+			const TPair<FString, FCharacterBodyProfile>* P = Presets.FindByPredicate([&](const auto& X) { return X.Key == Who[i].Preset; });
+			D.Profile = P ? P->Value : FCharacterBodyProfile();
+			Assembly->bHideSkeletonMesh = true;
+			Assemblies.Add(Assembly);
+			Descs.Add(D);
+		}
+		auto Apply = [&](UMaterialInterface* M)
+		{
+			for (int32 i = 0; i < Assemblies.Num(); ++i)
+			{
+				FCharacterDescription D = Descs[i];
+				for (FCharacterPart& Part : D.Parts)
+				{
+					Part.Material = M;
+				}
+				Assemblies[i]->SetDescription(D);
+			}
+		};
+		Apply(BodyMID);
+
+		// La largeur du fondu arrive bien sur les pièces, à l'échelle du corps
+		for (int32 i = 0; i < Assemblies.Num(); ++i)
+		{
+			const UStaticMeshComponent* Thigh = Assemblies[i]->GetPartComponent(TEXT("thigh_l"));
+			const float Expected = Descs[i].Profile.JointBlendDistance * Descs[i].Profile.Height * Who[i].Scale;
+			const float Got = Thigh && Thigh->GetCustomPrimitiveData().Data.Num() ? Thigh->GetCustomPrimitiveData().Data[0] : -1.f;
+			AddInfo(FString::Printf(TEXT("%s × %.1f : fondu %.1f cm (attendu %.1f)"), Who[i].Preset, Who[i].Scale, Got, Expected));
+			TestTrue(*FString::Printf(TEXT("%s : fondu à l'échelle"), Who[i].Preset), FMath::Abs(Got - Expected) < 0.01f);
+		}
+
+		TW.Tick(8);
+		if (GDistanceFieldAsyncQueue)
+		{
+			GDistanceFieldAsyncQueue->BlockUntilAllBuildsComplete();
+		}
+		auto Warm = [&]()
+		{
+			for (int32 k = 0; k < 5; ++k)
+			{
+				TW.Tick(1, 0.f);
+				Capture(TW.World, Eye, Target, TEXT("_warmup.png"), 320, 160, Fov, Raw);
+				if (GShaderCompilingManager)
+				{
+					GShaderCompilingManager->FinishAllCompilation();
+				}
+			}
+		};
+		Warm();
+		Capture(TW.World, Eye, Target, FString::Printf(TEXT("Joints_%s_2_corps.png"), *Tag), 1280, 560, Fov, Raw);
+		BodyMID->SetScalarParameterValue(TEXT("DebugBlend"), 1.f);
+		Capture(TW.World, Eye, Target, FString::Printf(TEXT("Joints_%s_3_fondu.png"), *Tag), 1280, 560, Fov, Raw);
+		Apply(PlainMID);
+		Warm();
+		Capture(TW.World, Eye, Target, FString::Printf(TEXT("Joints_%s_1_sans.png"), *Tag), 1280, 560, Fov, Raw);
+		IFileManager::Get().Delete(*(FPaths::ProjectSavedDir() / TEXT("Automation/CharacterKit/_warmup.png")));
+	};
+
+	Scene({ { TEXT("Enfant"), 1.f }, { TEXT("Standard"), 1.f }, { TEXT("Grand"), 1.f } }, TEXT("trio"), FVector(-120, 620, 130), FVector(0, 0, 100), 50.f);
+	Scene({ { TEXT("Standard"), 2.5f } }, TEXT("geant"), FVector(-300, 1250, 300), FVector(0, 0, 230), 50.f);
+	return true;
+}
+
+#endif
