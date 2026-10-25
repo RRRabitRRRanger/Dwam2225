@@ -62,8 +62,8 @@ button:hover { border-color: var(--wood); }
       <div class="row">
         <label class="toggle"><input type="checkbox" id="ids"> Couleur par muscle</label>
         <label class="toggle"><input type="checkbox" id="bones"> Os seuls</label>
-        <label class="toggle"><input type="checkbox" id="skin" checked> Peau vivante</label>
-        <label class="toggle"><input type="checkbox" id="veins" checked> Veine</label>
+
+
       </div>
       <div class="legend" id="legend"></div>
     </section>
@@ -155,7 +155,7 @@ uniform vec2 uRes; uniform vec3 uEye, uTarget;
 uniform vec3 uMA[${NM}], uMB[${NM}], uMU[${NM}], uMS[${NM}], uMT[${NM}], uMC[${NM}];
 uniform vec3 uBA[${NB}], uBB[${NB}]; uniform float uBR[${NB}];
 uniform vec3 uHA, uHB, uHU; uniform vec3 uVP[${NV}];
-uniform float uDef, uFat, uIds, uBones, uSkin, uVeins;
+uniform float uDef, uFat, uIds, uBones; const float uSkin = 0.;
 float smin(float a, float b, float k) { float h = clamp(.5 + .5 * (b - a) / k, 0., 1.); return mix(b, a, h) - k * h * (1. - h); }
 // Ventre aplati (section elliptique w × h, orientée par « up ») qui se resserre en tendons plats aux deux bouts.
 float muscle(vec3 p, vec3 a, vec3 b, vec3 up, vec3 s, vec3 tt) {
@@ -166,15 +166,23 @@ float muscle(vec3 p, vec3 a, vec3 b, vec3 up, vec3 s, vec3 tt) {
   float t0 = tt.x, t1 = tt.y, at = s.z;
   float g = t < t0 ? 0. : t > 1. - t1 ? 0. : (t < at ? (t - t0) / max(at - t0, .01) : (1. - t1 - t) / max(1. - t1 - at, .01));
   g = sin(1.5707963 * clamp(g, 0., 1.));
-  float rw = mix(.4 * s.x * .7, s.x * .7, g), rh = mix(.15, s.y * .7, g);   // tendon : plat et fin
-  vec2 e = vec2(dot(c, u) / rw, dot(c, v) / rh);
+  // Retour aux attaches arrondies (v1, retour de l'auteur) : section presque ronde (aplatie au plus à 0,75),
+  // tendon en cordon rond, bouts sphériques. Les bouts plats et les tendons fins ne se fondent pas.
+  float rw = mix(.55, s.x * .7, g), rh = mix(.55, max(s.y, .75 * s.x) * .7, g);
+  // au-delà des bouts, la composante le long de l'axe ferme le volume en calotte arrondie
+  vec3 e = vec3(dot(c, u) / rw, dot(c, v) / rh, dot(c, ax) / min(rw, rh));
   float k = max(length(e), 1e-4);
-  // distance le long du rayon de l'ellipse : bien plus juste qu'un facteur min(rw, rh), qui affame le ray-march près des tendons
-  float d = length(c) * (1. - 1. / k);
-  float over = max(dot(q, ax) - L, -dot(q, ax));
-  return max(d, over) * .85;
+  return length(c) * (1. - 1. / k) * .9;
 }
 float capsule(vec3 p, vec3 a, vec3 b, float r) { vec3 ab = b - a; float t = clamp(dot(p - a, ab) / max(dot(ab, ab), 1e-4), 0., 1.); return length(p - (a + ab * t)) - r; }
+// Ellipsoïde (tendon large et arrondi, comme la plaque commune du triceps)
+float ellipsoid(vec3 p, vec3 c, vec3 ax, vec3 up, vec3 r) {
+  vec3 v = normalize(up - ax * dot(up, ax)), u = cross(ax, v), q = p - c;
+  vec3 l = vec3(dot(q, u), dot(q, v), dot(q, ax));
+  float k0 = length(l / r), k1 = length(l / (r * r));
+  return k0 * (k0 - 1.) / max(k1, 1e-4);
+}
+uniform vec3 uTC, uTX, uTU;
 float bonesField(vec3 p) { float d = 1e3; for (int i = 0; i < ${NB}; i++) d = smin(d, capsule(p, uBA[i], uBB[i], uBR[i]), .5);
   d = smin(d, muscle(p, uHA, uHB, uHU, vec3(4.2, 1.6, .5), vec3(.0, .0, 0)), .8); return d; }
 vec3 field(vec3 p) {   // x = distance, y = id du muscle le plus proche, z = distance aux os
@@ -182,12 +190,15 @@ vec3 field(vec3 p) {   // x = distance, y = id du muscle le plus proche, z = dis
   if (uBones > .5) return vec3(db, -2., db);
   float d = db, best = 1e3, id = -1.;
   for (int i = 0; i < ${NM}; i++) { float m = muscle(p, uMA[i], uMB[i], uMU[i], uMS[i], uMT[i]); if (m < best) { best = m; id = float(i); } d = smin(d, m, uDef); }
+  // tendon commun du triceps : une plaque large et arrondie à l'arrière du bras, jusqu'à l'olécrane
+  float tri = ellipsoid(p, uTC, uTX, uTU, vec3(2.4, .9, 6.5));
+  if (tri < best) { best = tri; id = 99.; }
+  d = smin(d, tri, max(uDef, .4));
   d -= uFat;
-  if (uVeins > .5) { float vd = 1e3; for (int i = 0; i < ${NV - 1}; i++) vd = min(vd, capsule(p, uVP[i], uVP[i + 1], .22)); d = smin(d, vd - .02 * uFat, .25); }
   return vec3(d, id, db);
 }
 vec3 normal(vec3 p) { vec2 e = vec2(.02, 0); return normalize(vec3(field(p + e.xyy).x - field(p - e.xyy).x, field(p + e.yxy).x - field(p - e.yxy).x, field(p + e.yyx).x - field(p - e.yyx).x)); }
-vec3 idColor(float id) { ${MUSCLES.map((m, i) => `if (id < ${i}.5) return uMC[${i}];`).join(" ")} return vec3(.8); }
+vec3 idColor(float id) { if (id > 98.) return vec3(.95, .93, .88); ${MUSCLES.map((m, i) => `if (id < ${i}.5) return uMC[${i}];`).join(" ")} return vec3(.8); }
 float hash(vec3 p) { p = fract(p * .3183 + .1); p *= 17.; return fract(p.x * p.y * p.z * (p.x + p.y + p.z)); }
 float noise(vec3 x) { vec3 i = floor(x), f = fract(x); f = f * f * (3. - 2. * f);
   return mix(mix(mix(hash(i), hash(i + vec3(1,0,0)), f.x), mix(hash(i + vec3(0,1,0)), hash(i + vec3(1,1,0)), f.x), f.y),
@@ -255,8 +266,12 @@ function draw() {
   const ha = point(HAND.a), hb = point(HAND.b), palmUp = norm(sub(point(["R", 1.1, 0, 1]), point(["R", 1.1, 0, 0])));
   gl.uniform3fv(U("uHA"), ha); gl.uniform3fv(U("uHB"), hb); gl.uniform3fv(U("uHU"), palmUp);
   gl.uniform3fv(U("uVP"), VEIN.flatMap(point));
+  // plaque du triceps : du milieu de l'humérus (arrière) à l'olécrane
+  const ta = point(["H", .55, 0, -2.4]), tb = point(["U", -.04, 0, -2.0]);
+  gl.uniform3fv(U("uTC"), scale(add(ta, tb), .5)); gl.uniform3fv(U("uTX"), norm(sub(tb, ta)));
+  gl.uniform3fv(U("uTU"), norm(sub(scale(add(ta, tb), .5), point(["H", .78, 0, 0]))));
   gl.uniform1f(U("uDef"), P.def); gl.uniform1f(U("uFat"), P.fat);
-  ["ids", "bones", "skin", "veins"].forEach(id => gl.uniform1f(U("u" + id[0].toUpperCase() + id.slice(1)), document.getElementById(id).checked ? 1 : 0));
+  ["ids", "bones"].forEach(id => gl.uniform1f(U("u" + id[0].toUpperCase() + id.slice(1)), document.getElementById(id).checked ? 1 : 0));
   gl.drawArrays(gl.TRIANGLES, 0, 3);
 }
 
@@ -264,7 +279,7 @@ const fmt = { def: v => v.toFixed(2) + " cm", fat: v => v.toFixed(2) + " cm", ma
 function sync() { Object.keys(P).forEach(k => { const i = document.getElementById(k); i.value = P[k]; document.getElementById(k + "O").textContent = fmt[k](P[k]); }); }
 Object.keys(P).forEach(k => document.getElementById(k).addEventListener("input", e => { P[k] = +e.target.value; sync(); draw(); }));
 document.querySelectorAll("[data-p]").forEach(b => b.addEventListener("click", () => { const [d, f, m] = b.dataset.p.split(",").map(Number); P.def = d; P.fat = f; P.mass = m; sync(); draw(); }));
-["ids", "bones", "skin", "veins"].forEach(id => document.getElementById(id).addEventListener("change", draw));
+["ids", "bones"].forEach(id => document.getElementById(id).addEventListener("change", draw));
 document.getElementById("legend").innerHTML = MUSCLES.map(m => `<span class="sw" style="background:${m.c}"></span><span>${m.name}</span>`).join("");
 new ResizeObserver(draw).observe(cv);
 sync(); draw();
