@@ -135,7 +135,7 @@ flowchart TD
 | **J4 — L'adversaire** | Fiche de PNJ ; State Tree ; tokens ; phases lisibles | Combats simulés IA contre IA (durées, issue) | La lisibilité |
 | **J5 — La scène** | Dialogue minimal + emote ; mort imminente ; potentiel vital ; loot minimal ; mémoire | Somme nulle vérifiée par tests ; sauvegarde / chargement | Est-ce amusant ? |
 
-**En continu, dès J1** : un **build packagé** à chaque jalon (pour découvrir tôt ce qui casse hors de l'éditeur), les **budgets** de temps par système, et le **journal**.
+**En continu, dès J1** : les **budgets** de temps par système et le **journal**. **Builds packagés** (corrigé avec l'auteur, 2026-10-25 : un par jalon coûterait de plus en plus cher) : **un seul tôt**, à J1, pour découvrir ce qui casse hors de l'éditeur (shaders des plugins, render targets, assets en lecture seule), puis **un par palier** (P1, P2…).
 
 **Ce qui est volontairement repoussé après P1** : visage et bouche, vêtements, voix, factions complètes, feu, rythme, nuages, surfels, culling, génération d'un acte. Ce sont des chantiers de P2. SDFEyes et CharacterKit continuent en arrière-plan quand un lot s'y prête.
 

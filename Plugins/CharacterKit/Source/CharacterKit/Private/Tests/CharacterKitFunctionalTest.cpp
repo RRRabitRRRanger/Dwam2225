@@ -1,4 +1,5 @@
 #include "CharacterAssemblyComponent.h"
+#include "CharacterKitLibrary.h"
 #include "CharacterPreset.h"
 #include "Animation/AnimSequence.h"
 #include "Animation/AnimSingleNodeInstance.h"
@@ -323,6 +324,7 @@ bool FCharacterKitCaptureTest::RunTest(const FString& Parameters)
 	UCharacterAssemblyComponent* Assembly = nullptr;
 	USkeletalMeshComponent* Skel = nullptr;
 	SpawnMannequin(TW, Mesh, Walk, Assembly, Skel);
+	Assembly->SetDescription(UCharacterKitLibrary::MakeProxyDescription(Mesh));
 
 	// Le mannequin regarde vers +Y (pieds à l'origine) : profil depuis +X (gauche du perso), face depuis +Y,
 	// à plusieurs instants de la marche
@@ -340,7 +342,65 @@ bool FCharacterKitCaptureTest::RunTest(const FString& Parameters)
 	TW.Tick(1);
 	TestTrue(TEXT("Capture pièces seules, profil"), Capture(TW.World, Side, Target, TEXT("PartsOnly_side.png")));
 	TestTrue(TEXT("Capture pièces seules, face"), Capture(TW.World, Front, Target, TEXT("PartsOnly_front.png")));
+	TestTrue(TEXT("Capture pièces seules, trois quarts"), Capture(TW.World, FVector(270, 270, 160), Target, TEXT("PartsOnly_34.png")));
+	for (int32 Shot = 0; Shot < 2; ++Shot)
+	{
+		TW.Tick(8);
+		TestTrue(TEXT("Capture marche, trois quarts"), Capture(TW.World, FVector(270, 270, 160), Target, FString::Printf(TEXT("PartsWalk_%d_34.png"), Shot)));
+	}
 	AddInfo(FString::Printf(TEXT("Captures : %s"), *(FPaths::ConvertRelativePathToFull(FPaths::ProjectSavedDir()) / TEXT("Automation/CharacterKit"))));
+	return true;
+}
+
+#endif
+
+#if WITH_DEV_AUTOMATION_TESTS
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FCharacterKitProxySymmetryTest, "CharacterKit.Proxy.Symmetry",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FCharacterKitProxySymmetryTest::RunTest(const FString& Parameters)
+{
+	using namespace CharacterKitTestPrivate;
+
+	USkeletalMesh* Mesh = LoadObject<USkeletalMesh>(nullptr, MannequinPath);
+	if (!TestNotNull(TEXT("Mannequin chargé"), Mesh))
+	{
+		return false;
+	}
+	const FCharacterDescription Desc = UCharacterKitLibrary::MakeProxyDescription(Mesh);
+	TestTrue(TEXT("23 pièces : 9 au centre (bassin, 5 vertèbres, 2 cou, tête) + 7 paires (clavicule, bras, avant-bras, main, cuisse, mollet, pied)"), Desc.Parts.Num() == 23);
+
+	// En pose de référence, chaque pièce gauche a sa jumelle droite au miroir du plan X = 0
+	FTestWorld TW;
+	UCharacterAssemblyComponent* Assembly = nullptr;
+	USkeletalMeshComponent* Skel = nullptr;
+	SpawnMannequin(TW, Mesh, nullptr, Assembly, Skel);
+	Assembly->SetDescription(Desc);
+	double MaxMirrorError = 0.0;
+	int32 Pairs = 0;
+	for (const FCharacterPart& Part : Desc.Parts)
+	{
+		FString Name = Part.Slot.ToString();
+		if (!Name.EndsWith(TEXT("_l")))
+		{
+			continue;
+		}
+		const FName Twin(Name.LeftChop(2) + TEXT("_r"));
+		const UStaticMeshComponent* L = Assembly->GetPartComponent(Part.Slot);
+		const UStaticMeshComponent* R = Assembly->GetPartComponent(Twin);
+		if (!TestTrue(*FString::Printf(TEXT("Jumelle de %s"), *Name), L && R))
+		{
+			continue;
+		}
+		FVector PL = L->GetComponentLocation();
+		const FVector PR = R->GetComponentLocation();
+		PL.X = -PL.X;
+		MaxMirrorError = FMath::Max(MaxMirrorError, FVector::Dist(PL, PR));
+		++Pairs;
+	}
+	AddInfo(FString::Printf(TEXT("%d pièces, %d paires gauche / droite, écart au miroir max : %.2f cm"), Desc.Parts.Num(), Pairs, MaxMirrorError));
+	TestTrue(TEXT("Symétrie gauche / droite (< 0,5 cm)"), MaxMirrorError < 0.5);
 	return true;
 }
 
