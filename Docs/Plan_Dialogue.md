@@ -17,15 +17,34 @@
 
 Clint Hocking (directeur créatif de *Far Cry 2*) a appelé **dissonance ludonarrative** (2007, à propos de *BioShock*) l'écart entre ce que l'histoire dit et ce que le jeu fait faire. Ce que veut l'auteur, c'est l'inverse : les gestes de jeu **sont** le récit.
 
-### Précédents (de mémoire, à vérifier avant de s'en servir)
+### Précédents proposés par Claude, et l'avis de l'auteur (2026-10-25)
 
-- ***Deus Ex*** (2000) : les personnages commentent la façon dont on a mené une mission (tuer ou épargner), sans le présenter comme un système de morale.
-- ***Dishonored*** (2012) : le « chaos » monte avec les morts ; le monde, des personnages et la fin changent en conséquence.
-- ***Mass Effect 2*** : les **interruptions** (un geste à déclencher pendant une conversation) : l'action entre dans le dialogue.
-- ***Metal Gear Solid 3*** : le combat final contre The Boss, l'ancienne mentore passée de l'autre côté : un combat qui raconte une relation. Et The Sorrow, qui fait marcher le joueur parmi les fantômes de ceux qu'il a tués.
-- ***Undertale*** : chaque combat peut se résoudre en parlant, en agissant, en épargnant.
-- ***Kingdom Come: Deliverance*** : des ennemis qui se rendent, un joueur qui peut céder.
-- ***Alpha Protocol*** : des répliques choisies sous la pression du temps, par attitude plutôt que par texte complet.
+L'auteur confirme que les descriptions sont justes, mais **ce n'est pas ce qu'il veut reproduire** :
+
+| Jeu | Ce que Claude en tirait | Avis de l'auteur |
+|---|---|---|
+| *Deus Ex*, *Dishonored* | Le monde réagit à **si** on tue | Pas ça : l'auteur met en avant **comment** on tue ou comment on épargne (voir ci-dessous) |
+| *Mass Effect 2* (interruptions) | L'action entre dans le dialogue | « Sympa », pas prévu |
+| *Metal Gear Solid 3* (The Boss) | Un combat qui raconte une relation | Un jeu couloir : scripté, les choses ne peuvent pas se passer autrement |
+| *Undertale* | Combats résolus en parlant, en épargnant | Un bijou, mais pas une proposition qui le touche en tant que joueur |
+| *Kingdom Come: Deliverance* | Redditions | L'auteur le connaît mal ; trop lourd, « plus simu que jeu » |
+| *Alpha Protocol* | Répliques sous pression du temps | — |
+
+### Ce que l'auteur met en avant : la manière de se battre (2026-10-25)
+
+Dit « de manière simpliste » par l'auteur :
+- **Foncer dans le tas**, prendre l'aggro et se défouler : c'est bien, c'est un jeu, le côté action **doit** marcher.
+- Mais un joueur **surtout sur la défensive**, qui ne rend que la **réponse équivalente**, **comme s'il appliquait la légitime défense** : ça doit compter aussi.
+- **L'anti-exemple : *Skyrim*.** On met un ennemi au sol, il crie qu'il se rend… puis se relève et recommence à se battre. Si on a « cru » cette présentation (pas une promesse, mais presque), qu'on se retourne et vaque à ses occupations, on se fait attaquer dans le dos.
+
+**Lecture (Claude).** Deux exigences en sortent :
+1. **Le style de combat est lu**, pas seulement l'issue : qui a frappé le premier, la proportion de la riposte, parer sans riposter, s'arrêter quand l'autre est à terre. C'est une mesure dans la durée, pas un compteur de morts.
+2. **Une reddition est un vrai état, et elle engage.** Celui qui se rend arrête vraiment. S'il trahit sa reddition, ce n'est pas un bug d'IA : c'est un **acte** choisi par un PNJ dont les valeurs le permettent (peu d'honneur), lisible, et qui aura des conséquences (rumeurs, réputation). C'est le **signal coûteux** d'[[Plan_EireneNexus]] : une reddition ne vaut que si la rompre coûte cher.
+
+## Réponses de l'auteur (2026-10-25)
+
+- **Le personnage du joueur est une page blanche**, comme dans *Skyrim* ou *Diablo*.
+- **Les répliques : à la *KOTOR*** (une liste de répliques en texte complet), **avec la voix de [[Plan_KlattVoice]]**. Lecture : dans *KOTOR*, le héros est muet et beaucoup de PNJ parlent une langue étrangère sous-titrée ; une voix synthétique, stylisée, sous-titrée y trouve naturellement sa place. Le joueur reste-t-il muet ? `À COMPLÉTER`.
 
 ### Ce que ça change pour le système
 
@@ -35,9 +54,27 @@ Clint Hocking (directeur créatif de *Far Cry 2*) a appelé **dissonance ludonar
 4. **La main contrôlée dit l'intention.** Avec l'arme comme filtre de la main ([[Plan_3C]], principe n° 10), la façon de tenir et d'utiliser l'arme est déjà un langage : arme basse, coups retenus, parades seules.
 5. **Les répliques du joueur** : écrites pour le scénario, choisies par le joueur ; les règles décident lesquelles sont proposées (selon ce qui s'est passé, y compris au combat) et comment le PNJ y répond.
 
+## La scène du chef (J5), vue par le dialogue (proposition de Claude, 2026-10-25)
+
+**D'où elle vient.** [[Plan_VerticalSlice]] (2026-10-04) construit la première version jouable autour **d'une scène**, partie de l'exemple d'*Elden Ring* de l'auteur ; « validée comme approche », **le boss peut changer**. Elle doit prouver **le monde, le côté RPG et la défaite sans mort**. La [[Feuille_de_route]] en fait le jalon **J5**, le dernier avant P1 : « dialogue minimal + emote, mort imminente, potentiel vital, loot minimal, mémoire ». C'est un **prototype de la boucle** (formes grises), pas une finition.
+
+**La scène d'origine, en six temps** (de [[Plan_VerticalSlice]]) : un chef **exige** que le joueur se soumette → **se soumettre** (rejoindre, tribut, respect, ou piège) → **refuser** (le combat commence) → **perdre** (mort imminente : capturé au camp, ou sauvé par des gardes rivaux avec une dette ; prix : argent, loot ou one-up) → **gagner** (potentiel du chef absorbé, l'arme change ; ses hommes se dispersent, se soumettent, ou un rival prend la place) → **revenir plus tard** (le monde se souvient).
+
+**Ce que le dialogue y ajoute, avec l'intention du 2026-10-25 :**
+
+1. **L'approche.** Le joueur arrive au camp des bandits. Les sentinelles réagissent à ce qu'elles voient (arme dégainée ou non, ce qu'on sait du joueur) : quelques répliques selon des règles.
+2. **L'exigence.** Le chef parle (Klatt, sous-titré). Le joueur a une **liste de répliques à la *KOTOR*** : se soumettre, refuser, négocier (un tribut), provoquer. Certaines n'apparaissent que si un fait le permet (une dette envers les gardes, un objet).
+3. **Le geste.** S'agenouiller est **aussi** une réponse, sans passer par la liste : l'emote est un événement comme une réplique. Dégainer pendant qu'il parle, aussi.
+4. **Le combat qui parle.** Si ça se bat, le chef et ses hommes **commentent la manière** : le joueur qui pare sans riposter, qui frappe le premier, qui s'acharne sur un homme à terre. La règle la plus précise gagne, comme chez Ruskin.
+5. **La reddition qui engage.** Un bandit à terre peut se rendre. **Il s'arrête vraiment** (l'anti-*Skyrim*). Un bandit sans honneur peut feindre, et c'est un acte que le jeu retient. Le joueur peut épargner ou achever : tout est lu.
+6. **La fin du combat est une négociation.** Le chef, en mauvaise posture, peut céder et proposer un marché ; le joueur, battu, tombe dans un événement de mort imminente. Dans les deux cas, on revient au dialogue sans changer de mode.
+7. **La mémoire.** Ce qui s'est passé devient des faits : « a épargné », « s'est agenouillé », « a trahi sa reddition ». Les gardes, au retour, en parlent.
+
+**Le minimum pour J5** (à valider) : un concept « le chef exige » ; quatre répliques du joueur ; l'emote s'agenouiller ; une dizaine de répliques du chef et de deux bandits selon la manière de se battre ; un état « rendu » respecté ; une poignée de faits sauvegardés. Pas de rumeurs ni de factions complètes (P2).
+
 ## Questions ouvertes
 
-1. **Le personnage du joueur** : une personne définie (comme Shepard ou Adam Jensen, avec sa voix et son caractère) ou une page plus blanche ? Ça change la façon d'écrire les choix.
-2. **Les répliques du joueur** : texte complet, ou une intention courte qui se déroule ensuite (la roue de *Mass Effect*) ? Voix enregistrée, synthétique ([[Plan_KlattVoice]]) ou texte seul ?
-3. **Au combat** : l'intention se lit **seulement** dans les gestes (rien d'affiché, comme *Deus Ex*), ou aussi par des gestes explicites (baisser l'arme, une roue d'emotes, une interruption à la *Mass Effect*) ?
-4. **Pour J5** : quelle part de tout ça faut-il dans la scène du chef ?
+1. ~~Le personnage du joueur~~ → **page blanche** (*Skyrim*, *Diablo*).
+2. ~~Les répliques du joueur~~ → **liste à la *KOTOR*, voix Klatt**. Le joueur reste-t-il muet ?
+3. **Au combat** : l'intention se lit **seulement** dans les gestes (rien d'affiché), ou aussi par des gestes explicites (baisser l'arme, une roue d'emotes) ?
+4. **La scène du chef** : la version ci-dessus te convient-elle, et le minimum pour J5 ?
