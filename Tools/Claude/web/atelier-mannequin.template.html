@@ -1,90 +1,106 @@
 <title>Atelier du mannequin</title>
 <meta name="claude:viewport-fit-sides" content="cover">
-<link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Condensed:wght@400;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
 <style>
-/* Layout : un établi — la vue 3D à gauche, un panneau d'outils à droite (empilé sous la vue sur téléphone). */
+/* Layout : un établi — la vue 3D du mannequin à gauche, des tiroirs à droite (un seul ouvert à la fois). */
 :root {
-  --bg: #e9e6e1;          /* plan de travail */
-  --panel: #f6f4f0;
-  --fg: #23211e;
-  --muted: #6d6860;
-  --line: #d3cec6;
-  --wood: #b07a45;        /* le bois des mannequins d'artiste */
-  --wood-soft: #e8d4bd;
-  --view: #2b2a28;        /* fond de la vue 3D */
+  --bg: #e9e6e1; --panel: #f6f4f0; --fg: #23211e; --muted: #6d6860; --line: #d3cec6;
+  --wood: #b07a45; --wood-soft: #e8d4bd; --view: #2b2a28; --ink: #3a6ea5; --muscle: #b4553f;
   --sans: "IBM Plex Sans Condensed", "Arial Narrow", system-ui, sans-serif;
   --mono: "IBM Plex Mono", ui-monospace, "Consolas", monospace;
 }
 @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
-  --bg: #1c1b19; --panel: #24221f; --fg: #ece8e1; --muted: #a39c91; --line: #3a3733;
-  --wood: #d29a62; --wood-soft: #4a3826; --view: #121110; color-scheme: dark } }
+  --bg: #1c1b19; --panel: #24221f; --fg: #ece8e1; --muted: #a39c91; --line: #3a3733; --wood: #d29a62; --wood-soft: #4a3826; --view: #121110; --ink: #7fb0e0; --muscle: #d97a62; color-scheme: dark } }
 :root[data-theme="dark"] {
-  --bg: #1c1b19; --panel: #24221f; --fg: #ece8e1; --muted: #a39c91; --line: #3a3733;
-  --wood: #d29a62; --wood-soft: #4a3826; --view: #121110; color-scheme: dark }
+  --bg: #1c1b19; --panel: #24221f; --fg: #ece8e1; --muted: #a39c91; --line: #3a3733; --wood: #d29a62; --wood-soft: #4a3826; --view: #121110; --ink: #7fb0e0; --muscle: #d97a62; color-scheme: dark }
 html, body { height: 100%; }
-body { background: var(--bg); color: var(--fg); font-family: var(--sans); font-size: 15px;
-  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 12px; box-sizing: border-box; }
-.app { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 14px; height: 100%; }
+body { background: var(--bg); color: var(--fg); font-family: var(--sans); font-size: 15px; box-sizing: border-box;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 12px; }
+.app { display: grid; grid-template-columns: minmax(0, 1fr) 380px; gap: 14px; height: 100%; }
 .view { position: relative; background: var(--view); border-radius: 6px; overflow: hidden; min-height: 420px; }
 .view canvas { display: block; width: 100%; height: 100%; }
 .hud { position: absolute; left: 12px; bottom: 10px; font: 12px var(--mono); color: #cfc8bd; pointer-events: none; }
-.panel { background: var(--panel); border: 1px solid var(--line); border-radius: 6px; overflow-y: auto; display: flex; flex-direction: column; min-width: 0; }
-.panel section { padding: 12px 14px; border-bottom: 1px solid var(--line); display: grid; gap: 8px; }
-h1 { font-size: 18px; margin: 0; font-weight: 600; text-wrap: balance; }
-h2 { font-size: 11px; margin: 0; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); font-weight: 600; }
+.panel { background: var(--panel); border: 1px solid var(--line); border-radius: 6px; overflow-y: auto; min-width: 0; }
+.head { padding: 12px 14px; border-bottom: 1px solid var(--line); display: grid; gap: 4px; }
+h1 { font-size: 18px; margin: 0; font-weight: 600; }
+h3 { font-size: 13px; margin: 4px 0 0; font-weight: 600; }
 p.note { margin: 0; color: var(--muted); font-size: 13px; line-height: 1.4; }
-.presets { display: flex; flex-wrap: wrap; gap: 6px; }
-button { font: 600 13px var(--sans); border: 1px solid var(--line); background: transparent; color: var(--fg); padding: 5px 10px; border-radius: 4px; cursor: pointer; }
+details { border-bottom: 1px solid var(--line); }
+summary { cursor: pointer; padding: 10px 14px; font-size: 12px; text-transform: uppercase; letter-spacing: .08em; font-weight: 600; color: var(--muted); list-style: none; display: flex; justify-content: space-between; }
+summary::after { content: "+"; font-family: var(--mono); }
+details[open] summary::after { content: "−"; }
+details[open] summary { color: var(--fg); }
+.drawer { padding: 0 14px 14px; display: grid; gap: 10px; }
+.row { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+button, select { font: 600 13px var(--sans); border: 1px solid var(--line); background: transparent; color: var(--fg); padding: 5px 10px; border-radius: 4px; cursor: pointer; }
+select { font-weight: 400; background: var(--panel); }
 button:hover { border-color: var(--wood); }
 button[aria-pressed="true"] { background: var(--wood); border-color: var(--wood); color: #fff; }
-button:focus-visible, input:focus-visible { outline: 2px solid var(--wood); outline-offset: 2px; }
-.slider { display: grid; grid-template-columns: 1fr 44px; align-items: center; column-gap: 8px; }
+button:focus-visible, input:focus-visible, select:focus-visible, summary:focus-visible { outline: 2px solid var(--wood); outline-offset: 2px; }
+.slider { display: grid; grid-template-columns: 1fr 64px; align-items: center; column-gap: 8px; }
 .slider label { font-size: 13px; }
 .slider output { font: 12px var(--mono); text-align: right; font-variant-numeric: tabular-nums; color: var(--muted); }
 .slider input { grid-column: 1 / -1; width: 100%; accent-color: var(--wood); margin: 0; }
-.picked { font: 13px var(--mono); background: var(--wood-soft); padding: 6px 8px; border-radius: 4px; min-height: 1.4em; }
-.row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.picked { font: 13px var(--mono); background: var(--wood-soft); padding: 6px 8px; border-radius: 4px; }
+.section-editor { width: 100%; aspect-ratio: 1; background: var(--bg); border-radius: 4px; touch-action: none; cursor: crosshair; display: block; }
 .toggle { display: flex; gap: 6px; align-items: center; font-size: 13px; }
-pre.json { font: 11px/1.4 var(--mono); max-height: 160px; overflow: auto; margin: 0; padding: 8px; background: var(--bg); border-radius: 4px; white-space: pre; }
-@media (max-width: 760px) { .app { grid-template-columns: 1fr; height: auto; } .view { height: 60vh; } }
-@media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto; } }
+pre.json { font: 11px/1.4 var(--mono); max-height: 180px; overflow: auto; margin: 0; padding: 8px; background: var(--bg); border-radius: 4px; }
+.list { display: grid; gap: 4px; }
+.list button { text-align: left; font-weight: 400; }
+@media (max-width: 800px) { .app { grid-template-columns: 1fr; height: auto; } .view { height: 58vh; } }
 </style>
 
 <div class="app">
-  <div class="view" id="view">
-    <div class="hud" id="hud">glisser : tourner · molette : zoom · clic : choisir une pièce</div>
-  </div>
+  <div class="view" id="view"><div class="hud" id="hud">glisser : tourner · molette : zoom · clic : choisir une pièce</div></div>
   <div class="panel">
-    <section>
+    <div class="head">
       <h1>Atelier du mannequin</h1>
-      <p class="note">Le mannequin de CharacterKit avec les données exportées d'Unreal : squelette du mannequin UE5 (89 os), 35 pièces générées, deux ancres d'yeux. Prototype d'interface pour l'outil M5.</p>
-    </section>
-    <section>
-      <h2>Préréglages</h2>
-      <div class="presets" id="presets"></div>
-    </section>
-    <section>
-      <h2>Proportions</h2>
+      <p class="note">CharacterKit avec les données d'Unreal (squelette UE5, 35 pièces, 2 yeux). Chaque pièce est décrite par des coupes le long de son os ; les muscles sont des pièces en plus, posées sur une pièce hôte.</p>
+    </div>
+    <details name="d" open id="dBody"><summary>Corps</summary><div class="drawer">
+      <div class="row" id="presets"></div>
       <div id="sliders" style="display:grid; gap:10px"></div>
-    </section>
-    <section>
-      <h2>Pièce choisie</h2>
+    </div></details>
+    <details name="d" id="dPiece"><summary>Pièce</summary><div class="drawer">
       <div class="picked" id="picked">Clique une pièce dans la vue.</div>
-    </section>
-    <section>
-      <h2>Affichage</h2>
+      <div id="pieceTools" hidden style="display:grid; gap:10px">
+        <div class="row" id="stations"></div>
+        <canvas class="section-editor" id="section" width="600" height="600" aria-label="Éditeur de la coupe : tirer les points"></canvas>
+        <div class="row">
+          <label class="toggle"><input type="checkbox" id="sym" checked> Symétrie</label>
+          <label class="toggle"><input type="checkbox" id="mirrorEdit" checked> Côté opposé aussi</label>
+          <label class="toggle"><input type="checkbox" id="isolate"> Isoler</label>
+        </div>
+        <div class="row"><button id="addStation">Ajouter une coupe</button><button id="delStation">Retirer la coupe</button><button id="copyPrev">Copier la précédente</button></div>
+        <div class="slider"><label for="stPos">Position de la coupe</label><output id="stPosO"></output><input type="range" id="stPos" min="0" max="1" step="0.01"></div>
+        <div class="slider"><label for="len">Longueur</label><output id="lenO"></output><input type="range" id="len" min="0.5" max="80" step="0.1"></div>
+        <div class="slider"><label for="cap0">Arrondi du début</label><output id="cap0O"></output><input type="range" id="cap0" min="0" max="1" step="0.01"></div>
+        <div class="slider"><label for="cap1">Arrondi de la fin</label><output id="cap1O"></output><input type="range" id="cap1" min="0" max="1" step="0.01"></div>
+        <p class="note">Coupe : en haut l'avant, à droite l'extérieur (pour le côté gauche du personnage). Grille : 1 cm.</p>
+      </div>
+    </div></details>
+    <details name="d" id="dMuscles"><summary>Muscles</summary><div class="drawer">
+      <p class="note">Un muscle est une pièce en plus, posée sur une pièce hôte (son os), avec un décalage et une inclinaison. Ajouté des deux côtés.</p>
+      <div class="row"><select id="muscleType" aria-label="Muscle à ajouter"></select><button id="addMuscle">Ajouter</button></div>
+      <div class="list" id="muscleList"></div>
+      <div id="muscleTools" hidden style="display:grid; gap:10px">
+        <h3 id="muscleName"></h3>
+        <div id="muscleSliders" style="display:grid; gap:10px"></div>
+        <div class="row"><button id="editMuscle">Éditer ses coupes</button><button id="delMuscle">Supprimer</button></div>
+      </div>
+    </div></details>
+    <details name="d" id="dView"><summary>Vue</summary><div class="drawer">
       <div class="row">
         <label class="toggle"><input type="checkbox" id="spin"> Tourner</label>
         <label class="toggle"><input type="checkbox" id="bones"> Os</label>
-        <label class="toggle"><input type="checkbox" id="anchors" checked> Ancres</label>
+        <label class="toggle"><input type="checkbox" id="anchors" checked> Yeux</label>
+        <label class="toggle"><input type="checkbox" id="showMuscles" checked> Muscles</label>
       </div>
-    </section>
-    <section>
-      <h2>Description (format FCharacterDescription)</h2>
+    </div></details>
+    <details name="d" id="dFile"><summary>Fichier</summary><div class="drawer">
       <div class="row"><button id="copy">Copier le JSON</button><span id="copied" class="note"></span></div>
       <pre class="json" id="json"></pre>
-    </section>
+    </div></details>
   </div>
 </div>
 
@@ -111,7 +127,6 @@ const SLIDERS = [
   ["HipWidth", "Bassin", .5, 2], ["ArmThickness", "Épaisseur des bras", .5, 2], ["LegThickness", "Épaisseur des jambes", .5, 2],
 ];
 let profile = { ...DEFAULT };
-
 const has = (n, p) => n.startsWith(p);
 function boneLengthFactor(P, n) {
   if (has(n, "thigh") || has(n, "calf")) return P.LegLength;
@@ -137,19 +152,16 @@ function partFactors(P, n) {
   return [1, 1, 1];
 }
 
-// ---------- maths : tout se calcule dans l'espace d'Unreal (X avant, Y droite, Z haut), converti à l'affichage ----------
+// ---------- maths dans l'espace d'Unreal (X avant, Y droite, Z haut), converti à l'affichage ----------
 const V = (a) => new THREE.Vector3(a[0], a[1], a[2]);
 const Q = (a) => new THREE.Quaternion(a[0], a[1], a[2], a[3]);
 const compose = (p, q, s) => new THREE.Matrix4().compose(p, q, s || new THREE.Vector3(1, 1, 1));
-// Unreal (main gauche, Z haut) -> three.js (main droite, Y haut) : on échange Y et Z
 const UE_TO_THREE = new THREE.Matrix4().set(1, 0, 0, 0, 0, 0, 1, 0, 0, 1, 0, 0, 0, 0, 0, 1);
-
 const bones = DATA.bones;
 const refCS = bones.map(b => compose(V(b.pos), Q(b.rot)));
 const refLocal = bones.map((b, i) => b.parent < 0 ? refCS[i].clone() : new THREE.Matrix4().copy(refCS[b.parent]).invert().multiply(refCS[i]));
 const boneIndex = Object.fromEntries(bones.map((b, i) => [b.name, i]));
 const refLegHeight = bones[boneIndex.pelvis].pos[2] - bones[boneIndex.foot_l].pos[2];
-
 function posedCS(P) {
   const cs = [];
   bones.forEach((b, i) => {
@@ -165,162 +177,319 @@ function posedCS(P) {
   return cs;
 }
 function partOffset(P, bone, loc, rot, ignoreLength) {
-  const F = partFactors(P, bone);
-  const along = ignoreLength ? .5 * (F[1] + F[2]) : F[0];
-  const cross = [F[1], F[2], F[1]];
-  const q = Q(rot);
-  const scale = [0, 1, 2].map(a => {
-    const axis = new THREE.Vector3(a === 0 ? 1 : 0, a === 1 ? 1 : 0, a === 2 ? 1 : 0).applyQuaternion(q);
-    const A = Math.abs(axis.x);
-    return A * along + (1 - A) * cross[a];
-  });
+  const F = partFactors(P, bone), along = ignoreLength ? .5 * (F[1] + F[2]) : F[0], cross = [F[1], F[2], F[1]], q = Q(rot);
+  const scale = [0, 1, 2].map(a => { const ax = new THREE.Vector3(+(a === 0), +(a === 1), +(a === 2)).applyQuaternion(q); const A = Math.abs(ax.x); return A * along + (1 - A) * cross[a]; });
   const cm = .5 * (F[1] + F[2]);
   return compose(new THREE.Vector3(loc[0] * (ignoreLength ? 1 : F[0]), loc[1] * cm, loc[2] * cm), q, new THREE.Vector3(...scale));
 }
 
-// ---------- géométrie des pièces : comme create_proxy_parts.py (capsules et ellipsoïdes à leur vraie taille) ----------
-function partGeometry(part) {
-  const [w, d, l] = part.size.map(v => Math.max(v, .5));
-  let g, height, r0;
-  if (part.shape === "Sphere") { r0 = 50; g = new THREE.SphereGeometry(r0, 24, 16); height = 2 * r0; }
-  else { r0 = .5 * Math.min(w, d); const line = Math.max(l - 2 * r0, 0); g = new THREE.CapsuleGeometry(r0, line, 8, 20); height = 2 * r0 + line; }
-  g.rotateX(Math.PI / 2);                       // l'axe de la capsule (Y de three) devient le Z local de la pièce
-  g.scale(w / (2 * r0), d / (2 * r0), l / height);
-  g.computeVertexNormals();
+// ---------- pièces décrites par des coupes (12 rayons, cm) le long du Z local ----------
+// Angle 0 = l'avant (Y local), 90° = X local (l'extérieur pour le côté gauche). Les pièces de droite sont dessinées en miroir.
+const N = 12;
+const ring = (f) => Array.from({ length: N }, (_, k) => +f(2 * Math.PI * k / N).toFixed(2));
+const ellipse = (front, side, back = front, inner = side) => ring(a => {
+  const c = Math.cos(a), s = Math.sin(a), ry = c >= 0 ? front : back, rx = s >= 0 ? side : inner;
+  return 1 / Math.sqrt((c / ry) ** 2 + (s / rx) ** 2);
+});
+const sideOf = (slot) => slot.endsWith("_r") ? "r" : slot.endsWith("_l") ? "l" : "";
+const twinOf = (slot) => slot.endsWith("_l") ? slot.slice(0, -2) + "_r" : slot.endsWith("_r") ? slot.slice(0, -2) + "_l" : null;
+
+// Pièces de départ : celles d'Unreal, converties en coupes (même forme : capsule ou ellipsoïde à leur taille)
+const pieces = DATA.parts.map(p => {
+  const [w, d, l] = p.size;
+  const sphere = p.shape === "Sphere";
+  const sec = ellipse(d / 2, w / 2);
+  return { slot: p.slot, bone: p.bone, loc: p.loc, rot: p.rot, ignoreLength: p.ignoreLength, kind: "part",
+    length: sphere ? .01 : Math.max(l - Math.min(w, d), .01), caps: sphere ? [1, 1] : [1, 1],
+    capDepth: sphere ? l / 2 : Math.min(w, d) / 2,
+    stations: [0, 1], sections: [sec.slice(), sec.slice()] };
+});
+const bySlot = Object.fromEntries(pieces.map(p => [p.slot, p]));
+// « Avant » de la coupe = l'avant du personnage (+Y du composant) : selon le sens de l'os, le Y local de la pièce pointe devant ou derrière
+pieces.forEach(p => { const yAxis = new THREE.Vector3(0, 1, 0).applyQuaternion(Q(p.rot)).applyQuaternion(Q(bones[boneIndex[p.bone]].rot)); p.yFlip = yAxis.y < 0 ? -1 : 1; });
+const yFlipOf = pc => pc.kind === "muscle" ? bySlot[pc.host].yFlip : pc.yFlip;
+
+// Muscles : gabarits (cm, corps standard), posés sur une pièce hôte : dx latéral (extérieur), dy avant, dz le long de l'os
+const MUSCLES = {
+  "Biceps":       { host: "upperarm", dx: 0, dy: 3.2, dz: 2, tiltX: 0, tiltY: 0, length: 17, caps: [.8, .8], stations: [0, .45, 1], sections: [ellipse(1.6, 1.8), ellipse(3.1, 2.6, 1.2, 2.4), ellipse(1.4, 1.6)] },
+  "Triceps":      { host: "upperarm", dx: 0, dy: -3.4, dz: 0, tiltX: 0, tiltY: 0, length: 20, caps: [.8, .7], stations: [0, .4, 1], sections: [ellipse(1.6, 2.4), ellipse(1.4, 3, 3.2, 2.8), ellipse(1, 1.8)] },
+  "Deltoïde":     { host: "upperarm", dx: 1.4, dy: 0, dz: -8, tiltX: 0, tiltY: -12, length: 13, caps: [.9, .5], stations: [0, .35, 1], sections: [ellipse(4.6, 4.6, 4.2, 2.2), ellipse(4.8, 5, 4.4, 2.6), ellipse(1.6, 1.8, 1.4, 1.2)] },
+  "Grand dorsal": { host: "spine_04", dx: 9, dy: -5, dz: -6, tiltX: 0, tiltY: 20, length: 26, caps: [.6, .6], stations: [0, .4, 1], sections: [ellipse(1.6, 5, 2.4, 3), ellipse(1.8, 6, 2.8, 3.6), ellipse(1.2, 3, 1.6, 2)] },
+  "Dentelé":      { host: "spine_04", dx: 12.5, dy: 3, dz: -3, tiltX: 0, tiltY: 8, length: 12, caps: [.6, .6], stations: [0, .5, 1], sections: [ellipse(2.2, 1.4, 1.6, 1.4), ellipse(2.6, 1.8, 1.8, 1.6), ellipse(1.8, 1.2, 1.4, 1.2)] },
+  "Mollet":       { host: "calf", dx: 0, dy: -3.6, dz: -3, tiltX: 0, tiltY: 0, length: 20, caps: [.7, .8], stations: [0, .35, 1], sections: [ellipse(1.6, 3.4), ellipse(2, 4, 3.6, 3.6), ellipse(1, 2.2)] },
+};
+const muscles = [];
+
+// ---------- interpolation et maillage ----------
+const cr = (p0, p1, p2, p3, t) => .5 * ((2 * p1) + (-p0 + p2) * t + (2 * p0 - 5 * p1 + 4 * p2 - p3) * t * t + (-p0 + 3 * p1 - 3 * p2 + p3) * t * t * t);
+function ringRadius(s, angle) { const u = angle / (2 * Math.PI) * N, k = Math.floor(u), t = u - k, g = i => s[((i % N) + N) % N]; return Math.max(cr(g(k - 1), g(k), g(k + 1), g(k + 2), t), .05); }
+function sectionRadius(pc, v, angle) {
+  const st = pc.stations, n = st.length;
+  if (n === 1) return ringRadius(pc.sections[0], angle);
+  let i = 0; while (i < n - 2 && v > st[i + 1]) i++;
+  const t = Math.min(Math.max((v - st[i]) / Math.max(st[i + 1] - st[i], 1e-6), 0), 1);
+  const r = j => ringRadius(pc.sections[Math.min(Math.max(j, 0), n - 1)], angle);
+  return Math.max(cr(r(i - 1), r(i), r(i + 1), r(i + 2), t), .05);
+}
+function loftGeometry(pc, detail) {
+  const A = detail ? 36 : 20, R = detail ? 40 : 14, C = detail ? 8 : 5, L = pc.length;
+  const meanR = v => { let m = 0; for (let k = 0; k < 8; k++) m += sectionRadius(pc, v, k / 8 * 2 * Math.PI); return m / 8; };
+  const d0 = pc.capDepth != null ? pc.capDepth * pc.caps[0] : pc.caps[0] * meanR(0);
+  const d1 = pc.capDepth != null ? pc.capDepth * pc.caps[1] : pc.caps[1] * meanR(1);
+  const rings = [];
+  for (let c = C; c >= 1; c--) { const a = c / C * Math.PI / 2; rings.push([0, -L / 2 - d0 * Math.sin(a), Math.cos(a)]); }
+  for (let j = 0; j <= R; j++) rings.push([j / R, -L / 2 + j / R * L, 1]);
+  for (let c = 1; c <= C; c++) { const a = c / C * Math.PI / 2; rings.push([1, L / 2 + d1 * Math.sin(a), Math.cos(a)]); }
+  const pos = [], idx = [], flip = sideOf(pc.slot) === "r" ? -1 : 1, yf = yFlipOf(pc);
+  rings.forEach(([v, z, f]) => { for (let k = 0; k < A; k++) { const a = k / A * 2 * Math.PI, r = sectionRadius(pc, v, a) * Math.max(f, .001); pos.push(flip * Math.sin(a) * r, yf * Math.cos(a) * r, z); } });
+  for (let j = 0; j < rings.length - 1; j++) for (let k = 0; k < A; k++) { const a = j * A + k, b = j * A + (k + 1) % A, c = a + A, d = b + A; idx.push(a, c, b, b, c, d); }
+  const g = new THREE.BufferGeometry(); g.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3)); g.setIndex(idx); g.computeVertexNormals();
   return g;
 }
 
 // ---------- scène ----------
 const view = document.getElementById("view");
-const renderer = new THREE.WebGLRenderer({ antialias: true });
-renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
-view.prepend(renderer.domElement);
+const renderer = new THREE.WebGLRenderer({ antialias: true }); renderer.setPixelRatio(Math.min(devicePixelRatio, 2)); view.prepend(renderer.domElement);
 const scene = new THREE.Scene();
-const camera = new THREE.PerspectiveCamera(35, 1, 1, 5000);
-camera.position.set(150, 140, 290);
-const controls = new THREE.OrbitControls(camera, renderer.domElement);
-controls.target.set(0, 95, 0);
-controls.enableDamping = true;
+const camera = new THREE.PerspectiveCamera(35, 1, 1, 5000); camera.position.set(150, 140, 290);
+const controls = new THREE.OrbitControls(camera, renderer.domElement); controls.target.set(0, 95, 0); controls.enableDamping = true;
 scene.add(new THREE.HemisphereLight(0xfff4e6, 0x2a2622, .75));
 const sun = new THREE.DirectionalLight(0xffffff, .9); sun.position.set(120, 260, 180); scene.add(sun);
-const ground = new THREE.Mesh(new THREE.CircleGeometry(160, 64), new THREE.MeshStandardMaterial({ color: 0x5a554e, roughness: 1 }));
-ground.rotation.x = -Math.PI / 2; scene.add(ground);
+const ground = new THREE.Mesh(new THREE.CircleGeometry(160, 64), new THREE.MeshStandardMaterial({ color: 0x5a554e, roughness: 1 })); ground.rotation.x = -Math.PI / 2; scene.add(ground);
 const grid = new THREE.PolarGridHelper(160, 8, 8, 64, 0x7a736a, 0x6a645c); grid.position.y = .05; scene.add(grid);
-
 const woodMat = new THREE.MeshStandardMaterial({ color: 0xcaa07a, roughness: .62, side: THREE.DoubleSide });
+const muscleMat = new THREE.MeshStandardMaterial({ color: 0xc27560, roughness: .55, side: THREE.DoubleSide });
 const pickMat = new THREE.MeshStandardMaterial({ color: 0xe0823a, roughness: .5, emissive: 0x3a1600, side: THREE.DoubleSide });
+const ghostMat = new THREE.MeshStandardMaterial({ color: 0xcaa07a, roughness: .8, transparent: true, opacity: .12, depthWrite: false, side: THREE.DoubleSide });
+const body = new THREE.Group(); scene.add(body);
+const meshes = new Map();
+function meshFor(pc) {
+  let m = meshes.get(pc);
+  if (!m) { m = new THREE.Mesh(loftGeometry(pc, false), pc.kind === "muscle" ? muscleMat : woodMat); m.matrixAutoUpdate = false; m.userData.piece = pc; body.add(m); meshes.set(pc, m); }
+  return m;
+}
+function regeometry(pc) { const m = meshFor(pc); m.geometry.dispose(); m.geometry = loftGeometry(pc, pc === selected); }
+pieces.forEach(meshFor);
 const eyeMat = new THREE.MeshStandardMaterial({ color: 0xf2efe9, roughness: .3, side: THREE.DoubleSide });
 const pupilMat = new THREE.MeshBasicMaterial({ color: 0x1c2a33, side: THREE.DoubleSide });
-
-const body = new THREE.Group(); scene.add(body);
-const partMeshes = DATA.parts.map(p => {
-  const m = new THREE.Mesh(partGeometry(p), woodMat);
-  m.matrixAutoUpdate = false; m.userData.part = p; body.add(m); return m;
-});
 const anchorMeshes = DATA.anchors.map(a => {
-  const g = new THREE.Group();
-  const r = a.globeRadius * 1.0;
-  const ball = new THREE.Mesh(new THREE.SphereGeometry(r, 20, 14), eyeMat);
-  const pupil = new THREE.Mesh(new THREE.SphereGeometry(r * .42, 14, 10), pupilMat);
-  pupil.position.set(r * .75, 0, 0);            // regard selon le X local de l'ancre
-  g.add(ball, pupil); g.matrixAutoUpdate = false; g.userData.anchor = a; body.add(g); return g;
+  const g = new THREE.Group(), r = a.globeRadius;
+  const pupil = new THREE.Mesh(new THREE.SphereGeometry(r * .42, 14, 10), pupilMat); pupil.position.set(r * .75, 0, 0);
+  g.add(new THREE.Mesh(new THREE.SphereGeometry(r, 20, 14), eyeMat), pupil); g.matrixAutoUpdate = false; g.userData.anchor = a; body.add(g); return g;
 });
-const boneLines = new THREE.LineSegments(new THREE.BufferGeometry(), new THREE.LineBasicMaterial({ color: 0x7fd3ff, depthTest: false }));
-boneLines.renderOrder = 2; boneLines.visible = false; scene.add(boneLines);
+const boneLines = new THREE.LineSegments(new THREE.BufferGeometry(), new THREE.LineBasicMaterial({ color: 0x7fd3ff, depthTest: false })); boneLines.renderOrder = 2; boneLines.visible = false; scene.add(boneLines);
+const marker = new THREE.LineLoop(new THREE.BufferGeometry(), new THREE.LineBasicMaterial({ color: 0xe0823a, depthTest: false })); marker.renderOrder = 4; marker.matrixAutoUpdate = false; marker.visible = false; scene.add(marker);
 
-function rebuild() {
-  const cs = posedCS(profile);
-  partMeshes.forEach(m => {
-    const p = m.userData.part;
-    const world = new THREE.Matrix4().copy(cs[boneIndex[p.bone]]).multiply(partOffset(profile, p.bone, p.loc, p.rot, p.ignoreLength));
-    m.matrix.copy(UE_TO_THREE).multiply(world);
-  });
+let cs = posedCS(profile);
+function pieceWorld(pc) {
+  if (pc.kind === "muscle") {
+    const host = bySlot[pc.host];
+    const hostM = new THREE.Matrix4().copy(cs[boneIndex[host.bone]]).multiply(partOffset(profile, host.bone, host.loc, host.rot, false));
+    const flip = sideOf(pc.slot) === "r" ? -1 : 1;
+    const e = new THREE.Euler(THREE.MathUtils.degToRad(pc.tiltX), THREE.MathUtils.degToRad(flip * pc.tiltY), 0);
+    // la pièce hôte est mise à l'échelle par le profil : on retire cette échelle pour garder le muscle à sa taille propre,
+    // puis on lui applique l'épaisseur du profil
+    const hp = new THREE.Vector3(), hq = new THREE.Quaternion(), hs = new THREE.Vector3(); hostM.decompose(hp, hq, hs);
+    const F = partFactors(profile, host.bone);
+    const local = compose(new THREE.Vector3(flip * pc.dx * F[1], yFlipOf(pc) * pc.dy * F[2], pc.dz * F[0]), new THREE.Quaternion().setFromEuler(e), new THREE.Vector3(F[1], F[2], F[0]));
+    return compose(hp, hq).multiply(local);
+  }
+  return new THREE.Matrix4().copy(cs[boneIndex[pc.bone]]).multiply(partOffset(profile, pc.bone, pc.loc, pc.rot, pc.ignoreLength));
+}
+function place() {
+  cs = posedCS(profile);
+  [...pieces, ...muscles].forEach(pc => { meshFor(pc).matrix.copy(UE_TO_THREE).multiply(pieceWorld(pc)); });
   anchorMeshes.forEach(g => {
-    const a = g.userData.anchor;
-    const off = partOffset(profile, a.bone, a.loc, a.rot, false);
+    const a = g.userData.anchor, off = partOffset(profile, a.bone, a.loc, a.rot, false);
     const p = new THREE.Vector3(), q = new THREE.Quaternion(), s = new THREE.Vector3(); off.decompose(p, q, s);
     const sc = partFactors(profile, a.bone)[1];
-    const world = new THREE.Matrix4().copy(cs[boneIndex[a.bone]]).multiply(compose(p, q, new THREE.Vector3(sc, sc, sc)));
-    g.matrix.copy(UE_TO_THREE).multiply(world);
+    g.matrix.copy(UE_TO_THREE).multiply(new THREE.Matrix4().copy(cs[boneIndex[a.bone]]).multiply(compose(p, q, new THREE.Vector3(sc, sc, sc))));
   });
   const pts = [];
-  bones.forEach((b, i) => {
-    if (b.parent <= 0 || b.name.startsWith("ik_") || b.name.includes("twist")) return;
-    const a = new THREE.Vector3().setFromMatrixPosition(cs[b.parent]).applyMatrix4(UE_TO_THREE);
-    const c = new THREE.Vector3().setFromMatrixPosition(cs[i]).applyMatrix4(UE_TO_THREE);
-    pts.push(a, c);
-  });
+  bones.forEach((b, i) => { if (b.parent <= 0 || b.name.startsWith("ik_") || b.name.includes("twist")) return;
+    pts.push(new THREE.Vector3().setFromMatrixPosition(cs[b.parent]).applyMatrix4(UE_TO_THREE), new THREE.Vector3().setFromMatrixPosition(cs[i]).applyMatrix4(UE_TO_THREE)); });
   boneLines.geometry.setFromPoints(pts);
-  document.getElementById("json").textContent = JSON.stringify(description(), null, 1);
+  updateMarker(); updateJson();
 }
 
-function description() {
-  return {
-    Profile: profile,
-    Parts: DATA.parts.map(p => ({ Slot: p.slot, Bone: p.bone, Shape: p.shape, SizeCm: p.size, IgnoreLength: p.ignoreLength })),
-    Anchors: DATA.anchors.map(a => ({ Name: a.name, Bone: a.bone, Kind: "Eye", GlobeRadius: a.globeRadius, Mirror: a.mirror })),
-  };
+// ---------- sélection et éditeur de coupe ----------
+let selected = null, current = 0;
+function twins(pc) { const t = twinOf(pc.slot); return t ? [...pieces, ...muscles].find(x => x.slot === t) : null; }
+function select(pc) {
+  const prev = selected; selected = pc;
+  meshes.forEach((m, p) => { m.material = p === pc ? pickMat : (p.kind === "muscle" ? muscleMat : woodMat); });
+  if (prev && prev !== pc) regeometry(prev);
+  const box = document.getElementById("picked"), tools = document.getElementById("pieceTools");
+  if (!pc) { box.textContent = "Clique une pièce dans la vue."; tools.hidden = true; marker.visible = false; applyIsolate(); return; }
+  regeometry(pc);
+  box.textContent = `${pc.kind === "muscle" ? "muscle · " + pc.name + " · " : ""}${pc.slot} · os ${pc.bone || bySlot[pc.host].bone}`;
+  tools.hidden = false; current = Math.min(current, pc.stations.length - 1);
+  syncPieceSliders(); stationsUI(); drawSection(); applyIsolate(); updateMarker();
+  document.getElementById("dPiece").open = true;
 }
+function applyIsolate() {
+  const iso = document.getElementById("isolate").checked && selected;
+  meshes.forEach((m, p) => { m.material = p === selected ? pickMat : iso ? ghostMat : (p.kind === "muscle" ? muscleMat : woodMat); });
+}
+function updateMarker() {
+  if (!selected) return;
+  const v = selected.stations[current], z = -selected.length / 2 + v * selected.length, flip = sideOf(selected.slot) === "r" ? -1 : 1, pts = [];
+  for (let k = 0; k < 64; k++) { const a = k / 64 * 2 * Math.PI, r = sectionRadius(selected, v, a) + .08; pts.push(new THREE.Vector3(flip * Math.sin(a) * r, yFlipOf(selected) * Math.cos(a) * r, z)); }
+  marker.geometry.setFromPoints(pts); marker.matrix.copy(UE_TO_THREE).multiply(pieceWorld(selected)); marker.visible = true;
+}
+const cv = document.getElementById("section"), ctx = cv.getContext("2d");
+let drag = -1;
+const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+let frozenScale = 0;   // cadrage figé pendant un glissé, sinon le point saute
+const scaleCm = () => { if (frozenScale) return frozenScale; let m = .5; selected.sections.forEach(s => s.forEach(r => m = Math.max(m, r))); return cv.width * .42 / (m * 1.15); };
+const toScreen = (k, r, sc) => { const a = 2 * Math.PI * k / N; return [cv.width / 2 + Math.sin(a) * r * sc, cv.height / 2 - Math.cos(a) * r * sc]; };
+function curve(s, sc) { ctx.beginPath(); for (let k = 0; k <= 96; k++) { const a = k / 96 * 2 * Math.PI, r = ringRadius(s, a) * sc, x = cv.width / 2 + Math.sin(a) * r, y = cv.height / 2 - Math.cos(a) * r; k ? ctx.lineTo(x, y) : ctx.moveTo(x, y); } }
+function drawSection() {
+  if (!selected) return;
+  const sc = scaleCm(), W = cv.width, H = cv.height; ctx.clearRect(0, 0, W, H);
+  ctx.strokeStyle = css("--line"); ctx.lineWidth = 1;
+  for (let x = W / 2 % sc; x < W; x += sc) { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H); ctx.stroke(); }
+  for (let y = H / 2 % sc; y < H; y += sc) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke(); }
+  ctx.fillStyle = css("--muted"); ctx.font = "22px " + css("--mono"); ctx.font = "18px " + css("--mono"); ctx.fillText("avant", W / 2 - 24, 24); ctx.fillText("intérieur", 6, H / 2 - 10); ctx.fillText("extérieur", W - 100, H / 2 - 10); ctx.font = "22px " + css("--mono");
+  [current - 1, current + 1].forEach(j => { if (j < 0 || j >= selected.sections.length) return; curve(selected.sections[j], sc); ctx.strokeStyle = css("--muted"); ctx.setLineDash([6, 6]); ctx.stroke(); ctx.setLineDash([]); });
+  curve(selected.sections[current], sc); ctx.fillStyle = css("--wood-soft"); ctx.fill(); ctx.strokeStyle = css("--wood"); ctx.lineWidth = 3; ctx.stroke();
+  selected.sections[current].forEach((r, k) => { const [x, y] = toScreen(k, r, sc); ctx.beginPath(); ctx.arc(x, y, k === drag ? 11 : 8, 0, 2 * Math.PI); ctx.fillStyle = css("--ink"); ctx.fill(); });
+  ctx.fillStyle = css("--fg"); ctx.fillText(`coupe ${current + 1}/${selected.sections.length} · ${(selected.stations[current] * selected.length).toFixed(1)} cm`, 10, H - 14);
+}
+function edited(geom) {
+  [selected, document.getElementById("mirrorEdit").checked ? twins(selected) : null].forEach(pc => {
+    if (!pc) return;
+    if (pc !== selected) { pc.sections = selected.sections.map(s => s.slice()); pc.stations = selected.stations.slice(); pc.length = selected.length; pc.caps = selected.caps.slice(); pc.capDepth = selected.capDepth; }
+    regeometry(pc);
+  });
+  place(); drawSection();
+}
+const ptr = e => { const r = cv.getBoundingClientRect(); return [(e.clientX - r.left) * cv.width / r.width, (e.clientY - r.top) * cv.height / r.height]; };
+cv.addEventListener("pointerdown", e => {
+  if (!selected) return; const [x, y] = ptr(e), sc = scaleCm(); let best = -1, bd = 1e9;
+  selected.sections[current].forEach((r, k) => { const [px, py] = toScreen(k, r, sc), d = Math.hypot(px - x, py - y); if (d < bd) { bd = d; best = k; } });
+  if (bd < 40) { drag = best; frozenScale = sc; cv.setPointerCapture(e.pointerId); drawSection(); }
+});
+cv.addEventListener("pointermove", e => {
+  if (drag < 0) return; const [x, y] = ptr(e), sc = scaleCm(), a = 2 * Math.PI * drag / N;
+  const r = Math.max(((x - cv.width / 2) * Math.sin(a) - (y - cv.height / 2) * Math.cos(a)) / sc, .1), s = selected.sections[current];
+  s[drag] = +r.toFixed(2); if (document.getElementById("sym").checked) s[(N - drag) % N] = s[drag];
+  edited();
+});
+cv.addEventListener("pointerup", () => { drag = -1; frozenScale = 0; drawSection(); });
+function stationsUI() {
+  const box = document.getElementById("stations"); box.innerHTML = "";
+  selected.stations.forEach((v, i) => { const b = document.createElement("button"); b.textContent = `${i + 1}`; b.title = `${(v * selected.length).toFixed(1)} cm`;
+    b.setAttribute("aria-pressed", String(i === current)); b.addEventListener("click", () => { current = i; stationsUI(); syncPieceSliders(); drawSection(); updateMarker(); }); box.append(b); });
+}
+function pieceSlider(id, get, set, fmt) {
+  const input = document.getElementById(id), out = document.getElementById(id + "O");
+  input.addEventListener("input", () => { set(+input.value); out.textContent = fmt(+input.value); edited(); });
+  return () => { input.value = get(); out.textContent = fmt(get()); };
+}
+const pieceSyncs = [
+  pieceSlider("stPos", () => selected.stations[current], v => { const st = selected.stations, lo = current ? st[current - 1] + .01 : 0, hi = current < st.length - 1 ? st[current + 1] - .01 : 1; st[current] = Math.min(Math.max(v, lo), hi); }, v => (v * selected.length).toFixed(1) + " cm"),
+  pieceSlider("len", () => selected.length, v => selected.length = v, v => v.toFixed(1) + " cm"),
+  pieceSlider("cap0", () => selected.caps[0], v => selected.caps[0] = v, v => v.toFixed(2)),
+  pieceSlider("cap1", () => selected.caps[1], v => selected.caps[1] = v, v => v.toFixed(2)),
+];
+function syncPieceSliders() { pieceSyncs.forEach(s => s()); }
+document.getElementById("addStation").addEventListener("click", () => {
+  const st = selected.stations, i = Math.min(current, st.length - 2), v = .5 * (st[i] + st[i + 1]);
+  const sec = Array.from({ length: N }, (_, k) => +sectionRadius(selected, v, 2 * Math.PI * k / N).toFixed(2));
+  st.splice(i + 1, 0, v); selected.sections.splice(i + 1, 0, sec); current = i + 1; stationsUI(); syncPieceSliders(); edited();
+});
+document.getElementById("delStation").addEventListener("click", () => {
+  if (selected.stations.length <= 2) return; selected.stations.splice(current, 1); selected.sections.splice(current, 1);
+  current = Math.max(0, current - 1); stationsUI(); syncPieceSliders(); edited();
+});
+document.getElementById("copyPrev").addEventListener("click", () => { if (current) { selected.sections[current] = selected.sections[current - 1].slice(); edited(); } });
+document.getElementById("isolate").addEventListener("change", applyIsolate);
 
-// ---------- interface ----------
-const sliderBox = document.getElementById("sliders");
-const inputs = {};
+// ---------- muscles ----------
+const muscleType = document.getElementById("muscleType");
+Object.keys(MUSCLES).forEach(n => { const o = document.createElement("option"); o.textContent = n; muscleType.append(o); });
+let selectedMuscle = null;
+function addMuscle(name) {
+  const t = MUSCLES[name], made = [];
+  ["l", "r"].forEach(side => {
+    const hostSlot = t.host === "spine_04" ? "spine_04" : `${t.host}_${side}`;
+    if (!bySlot[hostSlot]) return;
+    const m = { kind: "muscle", name, slot: `${name.replace(/\s/g, "_")}_${side}`, host: hostSlot, dx: t.dx, dy: t.dy, dz: t.dz, tiltX: t.tiltX, tiltY: t.tiltY,
+      length: t.length, caps: t.caps.slice(), stations: t.stations.slice(), sections: t.sections.map(s => s.slice()) };
+    muscles.push(m); meshFor(m); made.push(m);
+  });
+  place(); muscleListUI(); return made[0];
+}
+function muscleListUI() {
+  const box = document.getElementById("muscleList"); box.innerHTML = "";
+  const names = [...new Set(muscles.map(m => m.name))];
+  names.forEach(n => { const b = document.createElement("button"); b.textContent = n + " (×2)"; b.setAttribute("aria-pressed", String(selectedMuscle && selectedMuscle.name === n));
+    b.addEventListener("click", () => { selectedMuscle = muscles.find(m => m.name === n); muscleToolsUI(); muscleListUI(); }); box.append(b); });
+  document.getElementById("muscleTools").hidden = !selectedMuscle;
+}
+const MUSCLE_SLIDERS = [["dx", "Décalage vers l'extérieur", -20, 20, "cm"], ["dy", "Décalage vers l'avant", -20, 20, "cm"], ["dz", "Décalage le long de l'os", -30, 30, "cm"],
+  ["tiltX", "Inclinaison avant / arrière", -60, 60, "°"], ["tiltY", "Inclinaison latérale", -60, 60, "°"]];
+function muscleToolsUI() {
+  if (!selectedMuscle) return; document.getElementById("muscleName").textContent = selectedMuscle.name + " — les deux côtés";
+  const box = document.getElementById("muscleSliders"); box.innerHTML = "";
+  MUSCLE_SLIDERS.forEach(([k, label, min, max, unit]) => {
+    const w = document.createElement("div"); w.className = "slider";
+    w.innerHTML = `<label for="m-${k}">${label}</label><output>${selectedMuscle[k].toFixed(1)} ${unit}</output><input type="range" id="m-${k}" min="${min}" max="${max}" step="0.1" value="${selectedMuscle[k]}">`;
+    const input = w.querySelector("input"), out = w.querySelector("output");
+    input.addEventListener("input", () => { muscles.filter(m => m.name === selectedMuscle.name).forEach(m => m[k] = +input.value); out.textContent = (+input.value).toFixed(1) + " " + unit; place(); });
+    box.append(w);
+  });
+}
+document.getElementById("addMuscle").addEventListener("click", () => { selectedMuscle = addMuscle(muscleType.value); muscleToolsUI(); muscleListUI(); });
+document.getElementById("editMuscle").addEventListener("click", () => { if (selectedMuscle) select(selectedMuscle); });
+document.getElementById("delMuscle").addEventListener("click", () => {
+  if (!selectedMuscle) return; const n = selectedMuscle.name;
+  for (let i = muscles.length - 1; i >= 0; i--) if (muscles[i].name === n) { const m = meshes.get(muscles[i]); body.remove(m); m.geometry.dispose(); meshes.delete(muscles[i]); if (selected === muscles[i]) select(null); muscles.splice(i, 1); }
+  selectedMuscle = null; muscleListUI(); updateJson();
+});
+
+// ---------- corps, vue, fichier ----------
+const sliderBox = document.getElementById("sliders"), inputs = {};
 SLIDERS.forEach(([key, label, min, max]) => {
-  const wrap = document.createElement("div"); wrap.className = "slider";
-  wrap.innerHTML = `<label for="s-${key}">${label}</label><output id="o-${key}"></output><input type="range" id="s-${key}" min="${min}" max="${max}" step="0.01">`;
-  sliderBox.append(wrap);
-  const input = wrap.querySelector("input"), out = wrap.querySelector("output");
-  input.addEventListener("input", () => { profile[key] = +input.value; out.textContent = (+input.value).toFixed(2); markPreset(null); rebuild(); });
+  const w = document.createElement("div"); w.className = "slider";
+  w.innerHTML = `<label for="s-${key}">${label}</label><output></output><input type="range" id="s-${key}" min="${min}" max="${max}" step="0.01">`;
+  sliderBox.append(w); const input = w.querySelector("input"), out = w.querySelector("output");
+  input.addEventListener("input", () => { profile[key] = +input.value; out.textContent = (+input.value).toFixed(2); markPreset(null); place(); });
   inputs[key] = { input, out };
 });
-function syncSliders() { SLIDERS.forEach(([k]) => { inputs[k].input.value = profile[k]; inputs[k].out.textContent = (+profile[k]).toFixed(2); }); }
-const presetBox = document.getElementById("presets");
-const presetButtons = Object.keys(PRESETS).map(name => {
-  const b = document.createElement("button"); b.textContent = name; b.setAttribute("aria-pressed", "false");
-  b.addEventListener("click", () => { profile = { ...DEFAULT, ...PRESETS[name] }; syncSliders(); markPreset(name); rebuild(); });
-  presetBox.append(b); return b;
-});
-function markPreset(name) { presetButtons.forEach(b => b.setAttribute("aria-pressed", String(b.textContent === name))); }
-
-const ray = new THREE.Raycaster(), mouse = new THREE.Vector2();
-let picked = null, down = null;
+const syncSliders = () => SLIDERS.forEach(([k]) => { inputs[k].input.value = profile[k]; inputs[k].out.textContent = (+profile[k]).toFixed(2); });
+const presetButtons = Object.keys(PRESETS).map(name => { const b = document.createElement("button"); b.textContent = name;
+  b.addEventListener("click", () => { profile = { ...DEFAULT, ...PRESETS[name] }; syncSliders(); markPreset(name); place(); }); document.getElementById("presets").append(b); return b; });
+const markPreset = name => presetButtons.forEach(b => b.setAttribute("aria-pressed", String(b.textContent === name)));
+function updateJson() {
+  const out = pc => ({ Slot: pc.slot, ...(pc.kind === "muscle" ? { Muscle: pc.name, Host: pc.host, OffsetCm: [pc.dx, pc.dy, pc.dz], TiltDeg: [pc.tiltX, pc.tiltY] } : { Bone: pc.bone }),
+    LengthCm: +pc.length.toFixed(2), Caps: pc.caps, Stations: pc.stations, SectionsCm: pc.sections });
+  document.getElementById("json").textContent = JSON.stringify({ Profile: profile, Parts: pieces.map(out), Muscles: muscles.map(out),
+    Anchors: DATA.anchors.map(a => ({ Name: a.name, Bone: a.bone, Kind: "Eye", GlobeRadius: a.globeRadius, Mirror: a.mirror })) }, null, 1);
+}
+const ray = new THREE.Raycaster(), mouse = new THREE.Vector2(); let down = null;
 renderer.domElement.addEventListener("pointerdown", e => { down = [e.clientX, e.clientY]; });
 renderer.domElement.addEventListener("pointerup", e => {
   if (!down || Math.hypot(e.clientX - down[0], e.clientY - down[1]) > 4) return;
-  const r = renderer.domElement.getBoundingClientRect();
-  mouse.set(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1);
+  const r = renderer.domElement.getBoundingClientRect(); mouse.set(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1);
   ray.setFromCamera(mouse, camera);
-  const hit = ray.intersectObjects(partMeshes, false)[0];
-  if (picked) picked.material = woodMat;
-  picked = hit ? hit.object : null;
-  const box = document.getElementById("picked");
-  if (picked) {
-    picked.material = pickMat;
-    const p = picked.userData.part;
-    box.textContent = `${p.slot} · os ${p.bone} · ${p.shape === "Sphere" ? "ellipsoïde" : "capsule"} ${p.size.map(v => v.toFixed(1)).join(" × ")} cm`;
-  } else box.textContent = "Clique une pièce dans la vue.";
+  const pool = [...meshes.values()].filter(m => m.visible && (m.material !== ghostMat));
+  const hit = ray.intersectObjects(pool, false)[0]; select(hit ? hit.object.userData.piece : null);
 });
-document.getElementById("bones").addEventListener("change", e => { boneLines.visible = e.target.checked; });
-document.getElementById("anchors").addEventListener("change", e => { anchorMeshes.forEach(g => g.visible = e.target.checked); });
+document.getElementById("bones").addEventListener("change", e => boneLines.visible = e.target.checked);
+document.getElementById("anchors").addEventListener("change", e => anchorMeshes.forEach(g => g.visible = e.target.checked));
+document.getElementById("showMuscles").addEventListener("change", e => muscles.forEach(m => meshFor(m).visible = e.target.checked));
 document.getElementById("copy").addEventListener("click", () => {
-  const msg = document.getElementById("copied"), text = document.getElementById("json").textContent;
-  navigator.clipboard.writeText(text).then(() => { msg.textContent = "Copié."; }).catch(() => {
-    const range = document.createRange(); range.selectNodeContents(document.getElementById("json"));
-    const sel = getSelection(); sel.removeAllRanges(); sel.addRange(range); msg.textContent = "Sélectionné : Ctrl+C pour copier.";
-  });
+  const msg = document.getElementById("copied"), pre = document.getElementById("json");
+  navigator.clipboard.writeText(pre.textContent).then(() => msg.textContent = "Copié.").catch(() => { const range = document.createRange(); range.selectNodeContents(pre); const s = getSelection(); s.removeAllRanges(); s.addRange(range); msg.textContent = "Sélectionné : Ctrl+C pour copier."; });
 });
-
-function resize() {
-  const w = view.clientWidth, h = view.clientHeight;
-  renderer.setSize(w, h, false); camera.aspect = w / Math.max(h, 1); camera.updateProjectionMatrix();
-}
+function resize() { const w = view.clientWidth, h = view.clientHeight; renderer.setSize(w, h, false); camera.aspect = w / Math.max(h, 1); camera.updateProjectionMatrix(); }
 new ResizeObserver(resize).observe(view);
 const spin = document.getElementById("spin");
-const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
-spin.checked = !reduce;
-function loop() {
-  if (spin.checked) body.rotation.y += .004;
-  controls.update(); renderer.render(scene, camera); requestAnimationFrame(loop);
-}
-syncSliders(); markPreset("Standard"); rebuild(); resize(); loop();
+matchMedia("(prefers-color-scheme: dark)").addEventListener("change", drawSection);
+syncSliders(); markPreset("Standard");
+["Deltoïde", "Biceps", "Triceps", "Grand dorsal", "Dentelé", "Mollet"].forEach(addMuscle);   // un exemple de chaque, modifiable
+selectedMuscle = null; muscleListUI(); place(); resize();
+(function loop() { if (spin.checked) body.rotation.y += .004; controls.update(); renderer.render(scene, camera); requestAnimationFrame(loop); })();
 </script>

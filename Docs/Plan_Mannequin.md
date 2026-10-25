@@ -157,3 +157,12 @@ Pour un futur générateur de pièces « plus guidé » que les capsules (M7), �
   - question : **pourquoi deux ateliers séparés** (mannequin / pièces) ? Réponse de Claude : séparés pour aller vite (un sujet par page) ; à terme un seul outil, l'éditeur de pièce ouvert depuis la pièce choisie sur le mannequin, pour la voir dans l'ensemble. À décider.
   - **Tiroirs** pour l'atelier du mannequin : organisation proposée (Corps, Pièces, Ancres, Vue, Fichier), à valider.
 - **Limites et pistes notées (auteur)** : un gabarit paramétrique regénéré **n'aura pas de MDF refait dans un build packagé** (le MDF se construit à l'import dans l'éditeur) : limite à garder en tête ; piste : des **proxys** (formes simples avec MDF pour le champ, pièce détaillée pour l'affichage). **Pas assez de CPD pour des blendshapes**, et d'autres systèmes en auront besoin : plutôt **une texture, une sorte de modificateur générique**. **Deltas stockés** : « riche idée », à rediscuter.
+
+## Atelier réuni (2026-10-26, ✔ testé par Claude dans le navigateur intégré)
+
+- **Un seul atelier** (https://claude.ai/artifact/5vYu3YXefzBR2gV5vEWzib, même adresse) : la vue du mannequin et **des tiroirs** (Corps, Pièce, Muscles, Vue, Fichier ; un seul ouvert à la fois). **Cliquer une pièce sur le corps ouvre son éditeur de coupes**, la pièce restant en place (option « Isoler » pour la voir seule, les autres en transparence) : réponse à la « vue d'ensemble » demandée par l'auteur.
+- **Toutes les pièces sont décrites par des coupes** (les 35 pièces d'Unreal converties, même forme au départ). Coupes : ajouter, retirer, déplacer le long de l'os ; symétrie ; « côté opposé aussi » (la pièce jumelle suit).
+- **Muscles séparés** : deltoïde, biceps, triceps, grand dorsal, dentelé, mollet ; un muscle = une pièce posée sur une pièce hôte (décalage extérieur / avant / le long de l'os, inclinaisons), **ajouté des deux côtés**, ses coupes éditables comme les autres. Placements de départ approximatifs.
+- Correction : « avant » d'une coupe = l'avant du personnage, quel que soit le sens de l'os (pour les jambes, le Y local des pièces pointe vers l'arrière).
+- Test local : `.claude/launch.json` (configuration `ateliers-web`) et `Tools/Claude/web/serve.ps1`, un petit serveur PowerShell, pour voir les pages dans le navigateur intégré (les artefacts publiés demandent une connexion que Claude n'a pas).
+- Reste à tester par l'auteur : les bouts, le mode « projection de plans », la segmentation, les placements des muscles.
