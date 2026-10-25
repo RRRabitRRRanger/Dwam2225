@@ -7,6 +7,8 @@
 #   2 = variante hybride + masque du mélange en orange              -> où et combien ça mélange
 #   3 = variante « surface » (méthode MF_Light2 de l'auteur)        -> gradient du GDF à la surface
 #   4 = jonctions seules (rouge = une autre pièce est à moins de R1 ou R2)
+#   5 = mesure : distance lue par la sonde proche ÷ R1
+#   6 = variante « champ » (une sonde, DwamNormalTransferField, hauteur R1)
 # Albédo beige + XOR filtré (Patterns.ush) ; soleil maison calculé dans le shader (SunDir).
 # Éclairage simple et fixe (unlit), pour juger la forme et pas la lumière.
 
@@ -87,7 +89,9 @@ float3 Nn = normalize(N);
 float Mask;
 float3 Hyb = DwamNormalTransferHybrid(Nn, R1, D1, G1, R2, D2, G2, BaseBlend, 1.0, 0.5, float3(0, 0, 1), 0.8, Mask);
 float3 Surf = DwamNormalTransferSurface(Nn, G0, SurfaceAlpha);
-float3 NS = Mode < 0.5 ? Hyb : (Mode < 1.5 ? Nn : (Mode < 2.5 ? Hyb : Surf));
+float FieldMask;
+float3 Fld = DwamNormalTransferField(Nn, R1, D1, G1, 0.5, 1.0, FieldMask);
+float3 NS = Mode < 0.5 ? Hyb : (Mode < 1.5 ? Nn : (Mode < 2.5 ? Hyb : (Mode < 3.5 ? Surf : (Mode > 5.5 ? Fld : Nn))));
 // Albédo : beige, avec le XOR filtré de Quilez projeté sur le plan le plus face à la normale du mesh (lit les formes)
 float3 An = abs(Nn);
 float2 UV = (An.z > An.x && An.z > An.y) ? WP.xy : ((An.x > An.y) ? WP.yz : WP.xz);
@@ -101,14 +105,14 @@ if (Mode > 1.5 && Mode < 2.5)
 {
     C = lerp(C, float3(1.0, 0.35, 0.05) * (0.35 + 0.65 * Ndl), saturate(Mask));
 }
-if (Mode > 3.5)
+if (Mode > 3.5 && Mode < 4.5)
 {
     // Jonctions seules : rouge là où la sonde proche voit une autre pièce, sans la part de base ni les garde-fous
     float J = saturate(1.0 - D1 / max(R1, 0.01));
     float J2 = saturate(1.0 - D2 / max(R2, 0.01));
     C = lerp(float3(0.5, 0.5, 0.5) * (0.4 + 0.6 * Ndl), float3(0.9, 0.1, 0.05), max(J, J2 * 0.5));
 }
-if (Mode > 4.5)
+if (Mode > 4.5 && Mode < 5.5)
 {
     // Mesure : distance lue par la sonde proche, divisée par sa hauteur R1. 1 (blanc) = attendu loin de tout ;
     // 0 (noir) = la sonde croit toucher une surface ; rouge = au-delà de 1,5 ; bleu = négatif (dans un objet)

@@ -671,6 +671,35 @@ bool FCharacterKitTwoSpheresTest::RunTest(const FString& Parameters)
 	}
 	MID->SetScalarParameterValue(TEXT("R1"), 25.f);
 
+	// Comparaison des MÉTHODES (réglages par défaut des guides), trois vues : côté loin, côté près, dessus
+	MID->SetScalarParameterValue(TEXT("BaseBlend"), 0.3f);
+	MID->SetScalarParameterValue(TEXT("R2"), 40.f);
+	struct FView { const TCHAR* Tag; FVector Eye; FVector Target; float Fov; };
+	const FView Views[] =
+	{
+		{ TEXT("loin"), FVector(0, 650, 260), FVector(0, 0, 150), 50.f },
+		{ TEXT("pres"), FVector(-40, 330, 230), FVector(-20, 0, 150), 40.f },
+		{ TEXT("dessus"), FVector(-20, 1, 900), FVector(-20, 0, 150), 45.f },
+	};
+	struct FMethod { const TCHAR* Tag; float Mode; float R1; };
+	const FMethod Methods[] =
+	{
+		{ TEXT("1origine"), 1.f, 5.f },
+		{ TEXT("2hybride"), 0.f, 5.f },   // deux sondes 5 / 40 cm, part de base 0,3
+		{ TEXT("3surface"), 3.f, 5.f },   // gradient du GDF à la surface, alpha 0,5
+		{ TEXT("4champ"), 6.f, 15.f },    // une sonde à 15 cm
+	};
+	for (const FView& V : Views)
+	{
+		for (const FMethod& M : Methods)
+		{
+			MID->SetScalarParameterValue(TEXT("Mode"), M.Mode);
+			MID->SetScalarParameterValue(TEXT("R1"), M.R1);
+			Capture(TW.World, V.Eye, V.Target, FString::Printf(TEXT("Methode_%s_%s.png"), V.Tag, M.Tag), 640, 480, V.Fov, Raw);
+		}
+	}
+	MID->SetScalarParameterValue(TEXT("R1"), 25.f);
+
 	// Gros plan sur l'intersection, sondes 25 / 60
 	for (int32 Mode : { 1, 0, 2 })
 	{
