@@ -22,7 +22,10 @@ canvas { display: block; width: 100%; height: 100%; touch-action: none; cursor: 
 .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 6px; overflow-y: auto; min-width: 0; }
 .panel section { padding: 12px 14px; border-bottom: 1px solid var(--line); display: grid; gap: 10px; }
 h1 { font-size: 18px; margin: 0; font-weight: 600; }
-h2 { font-size: 11px; margin: 0; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); font-weight: 600; }
+h2 { font-size: 11px; margin: 0; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); font-weight: 600; cursor: pointer; user-select: none; }
+h2::before { content: "▾ "; }
+.panel section.closed > :not(h2) { display: none; }
+.panel section.closed h2::before { content: "▸ "; }
 p.note { margin: 0; color: var(--muted); font-size: 13px; line-height: 1.4; }
 .slider { display: grid; grid-template-columns: 1fr 72px; align-items: center; column-gap: 8px; row-gap: 2px; }
 .slider label { font-size: 13px; }
@@ -89,7 +92,7 @@ textarea { width: 100%; box-sizing: border-box; font: 11px var(--mono); color: v
       <p class="note" id="selInfo">Clique sur un muscle dans la vue (sans glisser) pour savoir lequel c'est ; il se colore en orange.</p>
       <details id="adv"><summary>Mode avancé : corriger ce muscle à la main</summary>
         <div class="adv" id="advForm"></div>
-        <div class="row" style="margin-top:8px"><button id="advCopy">Copier le JSON du membre</button><button id="advReset">Annuler mes corrections</button></div>
+        <div class="row" style="margin-top:8px"><button id="advCopy">Copier mes corrections</button><button id="advReset">Annuler mes corrections</button></div>
         <p class="note" id="advNote"></p>
         <textarea id="advOut" rows="6" hidden></textarea>
       </details>
@@ -343,7 +346,17 @@ function setView(v) {
   draw();
 }
 cv.addEventListener("pointerdown", e => { drag = [e.clientX, e.clientY]; cv.setPointerCapture(e.pointerId); cv.focus(); });
-cv.addEventListener("pointermove", e => { if (!drag) return; yaw -= (e.clientX - drag[0]) * .01; pitch = Math.max(-1.5, Math.min(1.5, pitch + (e.clientY - drag[1]) * .01)); drag = [e.clientX, e.clientY]; view = null; draw(true); });
+cv.addEventListener("pointermove", e => {
+  if (!drag) return;
+  const dx = e.clientX - drag[0], dy = e.clientY - drag[1];
+  if (e.shiftKey || (e.buttons & 6)) {   // déplacer le centre de rotation dans le plan de l'écran
+    const f = [-Math.cos(pitch) * Math.sin(yaw), -Math.sin(pitch), -Math.cos(pitch) * Math.cos(yaw)];
+    const r = norm([f[2] * 0 - f[1] * 0 + -f[2], 0, f[0]]), u = [r[1] * f[2] - r[2] * f[1], r[2] * f[0] - r[0] * f[2], r[0] * f[1] - r[1] * f[0]];
+    const k = dist * .0015; target = add(target, add(scale(r, -dx * k), scale(u, dy * k)));
+  } else { yaw -= dx * .01; pitch = Math.max(-1.5, Math.min(1.5, pitch + dy * .01)); }
+  drag = [e.clientX, e.clientY]; view = null; draw(true);
+});
+cv.addEventListener("contextmenu", e => e.preventDefault());
 cv.addEventListener("pointerup", () => drag = null);
 cv.addEventListener("wheel", e => { e.preventDefault(); dist = Math.max(15, Math.min(400, dist * (1 + e.deltaY * .001))); draw(true); }, { passive: false });
 cv.addEventListener("keydown", e => {
@@ -407,7 +420,7 @@ function render() {
   [["ids", "uIds"], ["bones", "uBones"], ["fill", "uFill"], ["cutOn", "uCut"]].forEach(([id, u]) => gl.uniform1f(U(u), document.getElementById(id).checked ? 1 : 0));
   gl.drawArrays(gl.TRIANGLES, 0, 3);
   const deg = a => Math.round(((a * 180 / Math.PI) % 360 + 540) % 360 - 180);
-  document.getElementById("hud").textContent = `glisser : tourner · molette : zoom · lacet ${deg(yaw)}° · tangage ${deg(pitch)}°`;
+  document.getElementById("hud").textContent = `glisser : tourner · Maj+glisser ou clic droit : déplacer · double-clic : tourner autour du muscle · molette : zoom · ${deg(yaw)}° / ${deg(pitch)}°`;
 }
 
 // ---------- réglages : curseur et saisie au clavier liés, générés d'après le membre ----------
@@ -422,17 +435,33 @@ function sliders(box, list) {
 function sync() { Object.keys(P).forEach(k => { const r = document.getElementById(k); if (r) { r.value = P[k]; document.getElementById(k + "N").value = P[k]; } }); }
 function set(k, v, interactive) { if (!isFinite(v)) return; P[k] = v; sync(); if (k === "cut" && view === "coupe") setView("coupe"); else draw(interactive); }
 
+// ---------- sections repliables ----------
+document.querySelectorAll(".panel section h2").forEach(h => {
+  const sec = h.parentElement, key = "atelier-ferme-" + h.textContent.trim();
+  try { if (localStorage.getItem(key)) sec.classList.add("closed"); } catch (e) {}
+  h.addEventListener("click", () => { sec.classList.toggle("closed"); try { sec.classList.contains("closed") ? localStorage.setItem(key, "1") : localStorage.removeItem(key); } catch (e) {} });
+});
+
 // ---------- clic sur un muscle, mode avancé ----------
-let picking = false, SEL = -99, PART = "bras", downAt = null;
+let picking = false, SEL = -99, PART = "bras", downAt = null, ORIG = [];
 cv.addEventListener("pointerdown", e => { downAt = [e.clientX, e.clientY]; });
-cv.addEventListener("pointerup", e => {
-  if (!downAt || Math.hypot(e.clientX - downAt[0], e.clientY - downAt[1]) > 4) return;
+// Le n° du composant sous le pointeur : une passe de rendu qui écrit ce n° au lieu de la couleur
+function pickAt(e) {
   const rect = cv.getBoundingClientRect(), px = new Uint8Array(4);
   busy = false; picking = true; render();
   const k = cv.width / rect.width;
   gl.readPixels(Math.floor((e.clientX - rect.left) * k), Math.floor(cv.height - (e.clientY - rect.top) * k), 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, px);
   picking = false;
-  select(px[3] ? px[0] - 5 : -99);
+  return px[3] ? px[0] - 5 : -99;
+}
+// Double-clic sur un muscle : la caméra tourne désormais autour de lui
+cv.addEventListener("dblclick", e => {
+  const id = pickAt(e), m = D.muscles[id];
+  if (m) { frames(); const [a, v, b] = musclePoints(m); target = m.v ? v : lerp(a, b, .5); view = null; select(id); }
+});
+cv.addEventListener("pointerup", e => {
+  if (!downAt || Math.hypot(e.clientX - downAt[0], e.clientY - downAt[1]) > 4 || e.button !== 0) return;
+  select(pickAt(e));
 });
 const NAMES = { "-2": "Os", "-3": "Gabarit (tissu sous les muscles)", "-4": "Masse de graisse" };
 const specText = s => s ? `${s[0]} ${s.slice(1).join(" / ")}` : "aucun";
@@ -486,13 +515,17 @@ const clean = () => JSON.parse(JSON.stringify(D, (k, v) => (k === "L0" || k === 
 function edited() {
   restLengths();
   try { localStorage.setItem("atelier-edits-" + PART, JSON.stringify(clean().muscles)); } catch (e) {}
-  document.getElementById("advNote").textContent = "Corrections gardées dans ce navigateur. « Copier le JSON du membre » pour me les donner.";
+  document.getElementById("advNote").textContent = "Corrections gardées dans ce navigateur. « Copier mes corrections » pour me les donner.";
   draw(true);
 }
+// Seulement les muscles qui diffèrent du fichier, un par ligne : court à coller dans la conversation
 document.getElementById("advCopy").addEventListener("click", () => {
-  const out = document.getElementById("advOut"), txt = JSON.stringify(clean(), null, 1);
+  const orig = Object.fromEntries(ORIG.map(m => [m.name, JSON.stringify(m)]));
+  const changed = clean().muscles.filter(m => orig[m.name] !== JSON.stringify(m));
+  const out = document.getElementById("advOut");
+  const txt = changed.length ? "[\n" + changed.map(m => JSON.stringify(m)).join(",\n") + "\n]" : "(aucune correction)";
   out.hidden = false; out.value = txt; out.select();
-  try { navigator.clipboard.writeText(txt).then(() => document.getElementById("advNote").textContent = "JSON copié : colle-le moi dans la conversation.", () => {}); } catch (e) {}
+  try { navigator.clipboard.writeText(txt).then(() => document.getElementById("advNote").textContent = "Corrections copiées (" + changed.length + " muscle" + (changed.length > 1 ? "s" : "") + ") : colle-les moi dans la conversation.", () => {}); } catch (e) {}
 });
 document.getElementById("advReset").addEventListener("click", () => {
   try { localStorage.removeItem("atelier-edits-" + PART); } catch (e) {}
@@ -505,9 +538,10 @@ async function load(part) {
   const err = document.getElementById("err"); err.textContent = "";
   try {
     D = await (await fetch(PARTS[part], { cache: "no-store" })).json();   // toujours la dernière version du membre
+    ORIG = JSON.parse(JSON.stringify(D.muscles));   // le fichier tel quel, pour ne copier que les corrections
     let local = null; try { local = JSON.parse(localStorage.getItem("atelier-edits-" + part)); } catch (e) {}
     if (local) D.muscles = local;   // corrections faites à la main dans le mode avancé
-    document.getElementById("advNote").textContent = local ? "Des corrections locales sont actives pour ce membre." : "";
+    document.getElementById("advNote").textContent = local ? "Tes corrections locales sont actives pour ce membre : « Annuler mes corrections » pour revoir le fichier." : "";
     document.getElementById("clipBox").hidden = !D.clipTop;
     D.plates = D.plates || []; D.fill = D.fill || []; D.fat.thin = D.fat.thin || []; D.masses = D.masses || [];
     BONE = Object.fromEntries(D.bones.map(b => [b.id, b]));
